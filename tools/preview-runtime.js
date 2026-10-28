@@ -15,12 +15,14 @@
     let scene = initialScene;
     const storageKey = 'wrist.native-preview.' + index;
     const screenRequests = [];
+    const vibrations = [];
+    const recoveries = [];
     const events = [];
     const callbacks = [];
     const moduleCache = {};
     const connection = {
       getReadyState: cb => cb.success({ status: connected ? 1 : 2 }),
-      send: cb => events.push(JSON.parse(cb.data))
+      send: cb => events.push(typeof cb.data === 'string' ? JSON.parse(cb.data) : cb.data)
     };
     const storage = {
       get(cb) { try { cb.success(localStorage.getItem(storageKey) || ''); } catch { cb.fail(); } },
@@ -36,7 +38,11 @@
     function requireModule(name) {
       if (name === '@system.storage') return storage;
       if (name === '@system.interconnect') return { instance: () => connection };
-      if (name === '@system.brightness') return { setKeepScreenOn: cb => screenRequests.push(cb.keepScreenOn) };
+      if (name === '@system.brightness') return {
+        setKeepScreenOn: cb => screenRequests.push(cb.keepScreenOn),
+        systembrightnessrecovery: () => recoveries.push(1)
+      };
+      if (name === '@system.vibrator') return { vibrate: ({ mode }) => vibrations.push(mode) };
       if (!moduleCache[name]) {
         if (!bundle.modules[name]) throw new Error('Unknown preview module: ' + name);
         const module = { exports: {} };
@@ -125,7 +131,7 @@
     if (settingsOpen) page.openSettings();
     render();
     const heartbeat = window.setInterval(() => { if (scene === 'active' || scene === 'long') setScene(scene); }, 8000);
-    return { page, setScene, advance, render, screenRequests, events, callbacks,
+    return { page, setScene, advance, render, screenRequests, vibrations, recoveries, events, callbacks,
       stop() { window.clearInterval(heartbeat); page.onDestroy(); },
       reset() { localStorage.removeItem(storageKey); page.applySettings(initialSettings || requireModule('../../common/settings').DEFAULTS); page.paint(); render(); }
     };

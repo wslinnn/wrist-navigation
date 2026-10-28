@@ -52,7 +52,6 @@
       assert(near(value.left - less.right, 12) && near(more.left - value.right, 12), 'equal compact stepper gaps');
       assert(near(value.x + value.width / 2 - page.x, 168), 'values centered');
     }
-    assert(q('.font-selector').getBoundingClientRect().width === 288, 'font selector spans the common content width');
     assert(q('.version').textContent.includes(app.page.versionName), 'current version rendered');
     list.scrollTop = list.scrollHeight;
     const reset = q('.reset-defaults').getBoundingClientRect();
@@ -87,35 +86,23 @@
       } else assert(list.scrollHeight === list.clientHeight, 'short content fits without scrolling');
     }
   }
-  for (const font of ['default', 'song', 'kai', 'round']) {
-    scene('active'); click('.settings-entry'); click('.font-selector');
-    assert(!q('.settings-list') && q('.font-options'), 'font picker is an exclusive view');
-    const index = ['default', 'song', 'kai', 'round'].indexOf(font);
-    q('.font-options').children[index].querySelector('.font-choice').click();
-    assert(app.page.font === font && !app.page.fontPickerOpen, 'font-choice click selects and returns');
-    await document.fonts.ready;
-    for (const fontSize of [24, 30, 44]) {
-      app.page.saveSettings({ font, fontSize, arrowSize: 42, arrowWeight: 8 }); app.render();
-      settingsGeometry();
-      assert(parseFloat(getComputedStyle(q('.setting-value')).fontSize) === fontSize, 'settings values scale with global font');
-      click('.back');
-      scene('active'); geometry();
-      assert(parseFloat(getComputedStyle(q('.guidance-text')).fontSize) === fontSize, 'navigation global size');
-      if (font !== 'default') {
-        assert(getComputedStyle(q('.guidance-text')).fontFamily === app.page.fontFamily, 'selected family used for navigation');
-        assert(document.fonts.check(fontSize + 'px ' + app.page.fontFamily, '直行200米'), 'bundled browser font loaded');
-      }
-      for (const state of ['idle', 'error', 'expired']) {
-        scene(state); geometry();
-        assert(parseFloat(getComputedStyle(q('.rest-title')).fontSize) === fontSize, 'waiting title global size');
-        assert(parseFloat(getComputedStyle(q('.rest-hint')).fontSize) === app.page.hintSize, 'waiting hint proportional size');
-      }
-      click('.settings-entry');
-    }
+  for (const fontSize of [24, 30, 44]) {
+    app.page.saveSettings({ fontSize, arrowSize: 42, arrowWeight: 8 }); app.render();
+    settingsGeometry();
+    assert(parseFloat(getComputedStyle(q('.setting-value')).fontSize) === fontSize, 'settings values scale with global font');
     click('.back');
+    scene('active'); geometry();
+    assert(parseFloat(getComputedStyle(q('.guidance-text')).fontSize) === fontSize, 'navigation global size');
+    for (const state of ['idle', 'error', 'expired']) {
+      scene(state); geometry();
+      assert(parseFloat(getComputedStyle(q('.rest-title')).fontSize) === fontSize, 'waiting title global size');
+      assert(parseFloat(getComputedStyle(q('.rest-hint')).fontSize) === app.page.hintSize, 'waiting hint proportional size');
+    }
+    click('.settings-entry');
   }
+  click('.back');
   click('.settings-entry'); click('.reset-defaults');
-  assert(app.page.fontSize === 30 && app.page.arrowSize === 42 && app.page.arrowWeight === 8 && app.page.font === 'default', 'restore defaults');
+  assert(app.page.fontSize === 30 && app.page.arrowSize === 42 && app.page.arrowWeight === 8, 'restore defaults');
   click('.back');
   // Leave the saved stepper settings for the separate reload check.
   app.page.saveSettings(saved); scene('active');

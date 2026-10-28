@@ -5,9 +5,12 @@ const presentation = require('../src/common/presentation');
 
 test('device preferences reject invalid values and bound layout sizes', () => {
   assert.deepEqual(settings.normalize(null), settings.DEFAULTS);
-  assert.deepEqual(settings.normalize({ font: 'unverified', fontSize: 1000, arrowSize: -8, arrowWeight: NaN }),
-    { font: 'default', fontSize: 44, arrowSize: 32, arrowWeight: 8 });
+  assert.deepEqual(settings.normalize({ fontSize: 1000, arrowSize: -8, arrowWeight: NaN }),
+    { fontSize: 44, arrowSize: 32, arrowWeight: 8 });
   assert.equal(settings.normalize({ fontSize: '40' }).fontSize, 30);
+  const legacy = settings.normalize({ font: 'song', fontSize: 40 });
+  assert.deepEqual(legacy, { fontSize: 40, arrowSize: 42, arrowWeight: 8 });
+  assert.equal('font' in legacy, false);
 });
 
 test('a late load cannot undo user changes and queued writes finish in order', () => {
@@ -62,21 +65,5 @@ test('guidance uses the full original instruction and preserves long text at eve
     assert.equal(layout.guidanceLines.join(''), raw.replace(/\n/g, ''));
     assert.ok(layout.guidanceLines.every(row => Array.from(row).length <= Math.floor(288 / fontSize)));
     assert.ok(layout.guidanceHeight <= 166);
-  }
-});
-
-test('bundled fonts cover UI text and missing glyphs retain the original system fallback', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  for (const id of settings.FONTS) {
-    assert.equal(settings.normalize({ font: id }).font, id);
-    const option = settings.fontOption(id);
-    assert.equal(settings.fontForText(id, '直行200米等待导航显示设置文字大小箭头粗细恢复默认'), option.family);
-    assert.equal(settings.fontForText(id, '路口𠮷🚦'), 'sans-serif');
-    if (id === 'default') continue;
-    const directory = path.join(__dirname, '../src/common/fonts');
-    const bytes = fs.readFileSync(path.join(directory, option.family + '.ttf'));
-    assert.equal(bytes.readUInt32BE(), 0x00010000, 'real TrueType resource');
-    assert.match(fs.readFileSync(path.join(directory, option.family + '-OFL.txt'), 'utf8'), /SIL OPEN FONT LICENSE/);
   }
 });

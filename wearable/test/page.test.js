@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { lines, errorText, details } = require('../src/common/presentation');
+const { lines, errorText, invalidArgs, details } = require('../src/common/presentation');
 
 const source = fs.readFileSync(path.join(__dirname, '../src/pages/index/index.ux'), 'utf8')
   .match(/<script>([\s\S]*?)<\/script>/)[1].replace('export default', 'module.exports =');
@@ -15,9 +15,12 @@ function launch(options = {}) {
   let due = 0;
   let timerRuns = 0;
   const sent = [];
+  let rawSends = 0;
   const pending = [];
   const screenRequests = [];
   const screenCallbacks = [];
+  const vibrations = [];
+  const recoveries = [];
   const stored = [];
   let storageRead;
   const connection = {
@@ -28,7 +31,12 @@ function launch(options = {}) {
     },
     send(callbacks) {
       if (options.sendThrows) throw new Error('transport unavailable');
-      sent.push(JSON.parse(callbacks.data));
+      rawSends++;
+      if (options.sendRejectsAll || (options.sendRejectsString && typeof callbacks.data === 'string')) {
+        callbacks.fail('invalid args', 202);
+        return;
+      }
+      sent.push(JSON.parse(typeof callbacks.data === 'string' ? callbacks.data : JSON.stringify(callbacks.data)));
     }
   };
   const context = {
@@ -53,7 +61,11 @@ function launch(options = {}) {
           screenRequests.push(callbacks.keepScreenOn);
           screenCallbacks.push(callbacks);
           if (options.brightnessFails) callbacks.fail('unsupported', 201);
-        } };
+        }, systembrightnessrecovery() { recoveries.push(1); } };
+      }
+      if (name === '@system.vibrator') {
+        if (options.vibratorMissing) throw new Error('vibrator unavailable');
+        return { vibrate({ mode }) { vibrations.push(mode); } };
       }
       if (name === '@system.interconnect') {
         loads++;
@@ -70,9 +82,9 @@ function launch(options = {}) {
   const definition = context.module.exports;
   const page = Object.assign({}, definition.private, definition);
   page.onInit();
-  return { page, connection, sent, pending, screenRequests, screenCallbacks, stored, storageRead: () => storageRead, loads: () => loads,
+  return { page, connection, sent, pending, screenRequests, screenCallbacks, vibrations, recoveries, stored, storageRead: () => storageRead, loads: () => loads,
     advance(ms) { now += ms; if (tick && now >= due) { const run = tick; tick = null; timerRuns++; run(); } },
-    timerRuns: () => timerRuns, running: () => !!tick };
+    timerRuns: () => timerRuns, running: () => !!tick, rawSends: () => rawSends };
 }
 
 const navigation = seq => ({ v: 1, type: 'navigation', session: 'phone', seq, status: 'active', title: '高德地图', rawText: '前方200米右转', maneuver: 'right', instruction: '右转', distance: '200 米' });
@@ -132,6 +144,38 @@ test('send exceptions do not abort opening the page', () => {
   const app = launch({ connected: true, sendThrows: true });
   assert.doesNotThrow(() => app.page.onReady());
   assert.match(app.page.rawLines.join(''), /发送失败/);
+});
+
+test('Vela 5 invalid-args rejection switches to object payloads and resends once', () => {
+  const app = launch({ connected: true, sendRejectsString: true });
+  app.page.onReady();
+  assert.equal(app.rawSends(), 2, 'string rejection must resend the same ready as an object');
+  assert.deepEqual(app.sent, [{ v: 1, type: 'ready' }]);
+  app.page.onShow();
+  assert.equal(app.rawSends(), 3, 'latched object form must not retry the string form again');
+  assert.equal(app.sent.length, 2);
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.deepEqual(app.sent.at(-1), { v: 1, type: 'ack', session: 'phone', seq: 1 });
+  assert.equal(app.rawSends(), 4);
+  assert.equal(app.page.status, '高德导航');
+});
+
+test('both payload forms failing keeps the readable send failure', () => {
+  const app = launch({ connected: true, sendRejectsAll: true });
+  app.page.onReady();
+  assert.equal(app.rawSends(), 2);
+  assert.match(app.page.rawLines.join(''), /发送失败/);
+  assert.match(app.page.rawLines.join(''), /202/);
+});
+
+test('invalid args signature detection covers code and detail forms', () => {
+  assert.ok(invalidArgs('invalid args', 202));
+  assert.ok(invalidArgs('invalid args'));
+  assert.ok(invalidArgs({ message: 'invalid args' }));
+  assert.ok(invalidArgs({ data: 'invalid args' }));
+  assert.equal(invalidArgs('disconnect', 1006), false);
+  assert.equal(invalidArgs('timeout', 204), false);
+  assert.equal(invalidArgs(null, undefined), false);
 });
 
 test('late callbacks after page destruction do not update or send', () => {
@@ -328,36 +372,58 @@ test('storage completion after destroy cannot overwrite a closed page', () => {
   assert.equal(app.page.fontSize, 30);
 });
 
-test('font selection, typography and defaults survive storage and every display state', () => {
-  const app = launch({ connected: true, settings: '{"fontSize":30,"arrowSize":78,"arrowWeight":8}' });
+test('legacy font settings load silently and typography still scales', () => {
+  const app = launch({ connected: true, settings: '{"font":"song","fontSize":30,"arrowSize":78,"arrowWeight":8}' });
   app.page.onReady(); app.page.onShow();
   assert.equal(app.page.arrowSize, 78, 'upgrades preserve user adjustments');
-  app.page.openSettings(); app.page.openFonts();
-  app.page.selectFont('kai');
-  assert.equal(app.page.fontFamily, 'BandKai');
-  assert.equal(app.page.fontPickerOpen, false);
-  app.page.adjust('fontSize', 14);
-  assert.equal(app.stored.at(-1).font, 'kai', 'size adjustment must not reset the font');
+  assert.equal('font' in app.page.currentSettings(), false);
+  app.page.openSettings(); app.page.adjust('fontSize', 14);
   assert.equal(app.page.fontSize, 44);
   assert.equal(app.page.labelSize, 35);
   assert.equal(app.page.hintSize, 32);
   assert.equal(app.page.titleHeight, 62);
+  assert.equal(app.stored.at(-1).font, undefined);
   const restored = launch({ settings: JSON.stringify(app.stored.at(-1)) });
   restored.page.onReady();
-  assert.equal(restored.page.fontFamily, 'BandKai');
   assert.equal(restored.page.fontSize, 44);
-  app.page.closeSettings();
+});
+
+test('new instructions buzz once, unchanged heartbeats stay silent and arrival buzzes long', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
   app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
-  assert.equal(app.page.guidanceFontFamily, 'BandKai');
-  app.connection.onmessage({ data: JSON.stringify({ ...navigation(2), rawText: '直行到𠮷🚦路口' }) });
-  assert.equal(app.page.guidanceFontFamily, 'sans-serif');
-  assert.equal(app.page.guidanceLines.join(''), '直行到𠮷🚦路口');
-  app.page.openSettings(); app.page.openFonts();
-  assert.equal(app.page.onBackPress(), true);
-  assert.equal(app.page.fontPickerOpen, false);
-  assert.equal(app.page.settingsOpen, true);
-  app.page.resetSettings();
-  assert.deepEqual(app.stored.at(-1), { font: 'default', fontSize: 30, arrowSize: 42, arrowWeight: 8 });
-  app.page.onBackPress();
-  assert.equal(app.page.settingsOpen, false);
+  assert.deepEqual(app.vibrations, ['short']);
+  app.advance(8000);
+  app.connection.onmessage({ data: JSON.stringify(navigation(2)) });
+  assert.deepEqual(app.vibrations, ['short'], 'unchanged heartbeats must not re-buzz');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(3), instruction: '左转', maneuver: 'left', rawText: '前方100米左转' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short']);
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(4), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'long']);
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(5), status: 'idle', instruction: '等待导航' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'long'], 'non-guidance states never buzz');
+  app.connection.onmessage({ data: JSON.stringify(navigation(6)) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'long', 'short'], 'a resumed trip buzzes again');
+});
+
+test('a missing vibrator never blocks navigation rendering', () => {
+  const app = launch({ connected: true, vibratorMissing: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.deepEqual(app.vibrations, []);
+  assert.equal(app.page.status, '高德导航');
+  assert.equal(app.page.distance, '200 米');
+});
+
+test('destroying a lit page runs the brightness recovery fallback once', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.deepEqual(app.screenRequests, [true]);
+  app.page.onDestroy();
+  assert.deepEqual(app.recoveries, [1]);
+  const dark = launch({ connected: true });
+  dark.page.onReady(); dark.page.onShow();
+  dark.page.onDestroy();
+  assert.deepEqual(dark.recoveries, [], 'a page that never lit must not touch recovery');
 });

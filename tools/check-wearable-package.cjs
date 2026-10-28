@@ -16,6 +16,8 @@ let apiLoads = 0;
 let available = false;
 const connection = { getReadyState: callbacks => callbacks.success({ status: 1 }), send() {} };
 const screenRequests = [];
+const vibrations = [];
+const recoveries = [];
 const saved = [];
 const system = {
   setInterval: () => 1, clearInterval() {}, setTimeout: () => 1, clearTimeout() {},
@@ -25,7 +27,11 @@ const system = {
       get: callbacks => callbacks.success(''),
       set: callbacks => { saved.push(JSON.parse(callbacks.value)); callbacks.success(); }
     };
-    if (name === '@app-module/system.brightness') return { setKeepScreenOn({ keepScreenOn }) { screenRequests.push(keepScreenOn); } };
+    if (name === '@app-module/system.brightness') return {
+      setKeepScreenOn({ keepScreenOn }) { screenRequests.push(keepScreenOn); },
+      systembrightnessrecovery() { recoveries.push(1); }
+    };
+    if (name === '@app-module/system.vibrator') return { vibrate({ mode }) { vibrations.push(mode); } };
     if (available && name === '@app-module/system.interconnect') return { instance: () => connection };
     throw new Error('mock unavailable firmware API');
   }
@@ -60,6 +66,7 @@ connection.onmessage({ data: JSON.stringify({ v: 1, type: 'navigation', session:
   status: 'active', title: '高德地图', rawText: '右转进入示例路', maneuver: 'right', instruction: '右转', distance: '200 米' }) });
 assert.equal(page.distance, '200 米');
 assert.equal(page.status, '高德导航');
+assert.deepEqual(vibrations, ['short'], 'a new instruction buzzes once');
 assert.equal(typeof page.localDemo, 'undefined');
 assert.ok(manifest.features.some(feature => feature.name === 'system.brightness'));
 assert.deepEqual(screenRequests, [true]);
@@ -106,25 +113,9 @@ for (let i = 0; i < 6; i++) click('increase', byClass(page.template(page), 'font
 assert.equal(page.fontSize, 36);
 assert.equal(saved.at(-1).fontSize, 36);
 assert.equal(page.versionName, manifest.versionName);
-click('font-selector');
-assert.equal(page.fontPickerOpen, true);
-assert.equal(byClass(page.template(page), 'settings-list'), null);
-const fontChoices = byClass(page.template(page), 'font-options').children;
-for (let i = 1; i <= 3; i++) {
-  if (!page.fontPickerOpen) click('font-selector');
-  click('font-choice', byClass(page.template(page), 'font-options').children[i]);
-  assert.equal(page.font, ['default', 'song', 'kai', 'round'][i]);
-  assert.equal(saved.at(-1).font, page.font);
-  assert.equal(page.fontPickerOpen, false);
-  const family = page.fontFamily;
-  assert.ok(archive.getEntry('common/fonts/' + family + '.ttf'));
-  assert.ok(archive.getEntry('common/fonts/' + family + '-OFL.txt'));
-  assert.ok(styles[family].fontface, 'compiled font-face definition: ' + family);
-  assert.ok(archive.readFile('common/fonts/' + family + '.ttf').equals(
-    fs.readFileSync(path.join(project, 'wearable/src/common/fonts', family + '.ttf'))));
-}
+assert.ok(!archive.getEntry('common/fonts'), 'bundled fonts must be gone');
+assert.ok(manifest.features.some(feature => feature.name === 'system.vibrator'));
 click('reset-defaults');
-assert.equal(page.font, 'default');
 assert.equal(page.fontSize, 30);
 assert.equal(page.arrowSize, 42);
 assert.equal(page.arrowWeight, 8);
@@ -135,11 +126,17 @@ assert.equal(byClass(page.template(page), 'rest'), null);
 assert.equal(page.guidanceLines.join(''), '右转进入示例路');
 assert.ok(archive.getEntry('common/settings.png'));
 for (let i = 0; i < 3; i++) { click('settings-entry'); click('back'); }
+connection.onmessage({ data: JSON.stringify({ v: 1, type: 'navigation', session: 'package-check', seq: 2,
+  status: 'ended', title: '高德地图', rawText: '已到达目的地', maneuver: 'arrive', instruction: '导航已结束', distance: '' }) });
+assert.equal(page.status, '导航结束');
+assert.deepEqual(vibrations, ['short', 'long'], 'arrival buzzes long without repeating the turn buzz');
 for (let weight = 4; weight <= 10; weight++) {
   for (const maneuver of ['left', 'right', 'straight', 'slight_left', 'slight_right', 'sharp_left', 'sharp_right', 'uturn', 'roundabout', 'arrive', 'unknown']) {
     assert.ok(archive.getEntry('common/arrows/' + weight + '/' + maneuver + '.png'));
   }
 }
 page.onDestroy();
-assert.deepEqual(screenRequests, [true, false, true, false, true, false, true, false, true, false]);
-console.log('RPK ' + manifest.versionName + ': startup, compiled click handlers, font choices/resources, exclusive page trees, settings persistence/reset, navigation, screen lifecycle and assets passed.');
+assert.deepEqual(screenRequests, [true, false, true, false, true, false, true, false, true, false, false],
+  'active navigation lights the screen; guidance end and destruction each release it');
+assert.deepEqual(recoveries, [1], 'destruction runs the brightness recovery fallback once');
+console.log('RPK ' + manifest.versionName + ': startup, compiled click handlers, exclusive page trees, settings persistence/reset, navigation, screen lifecycle and assets passed.');

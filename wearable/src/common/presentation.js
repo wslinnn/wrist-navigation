@@ -28,6 +28,14 @@ function errorText(stage, data, code) {
     (detail ? '\n' + String(detail).slice(0, 160) : '');
 }
 
+// Vela 5 firmware (Band 10 Pro) types send data as an object and rejects
+// non-object payloads with this signature; older firmware accepts strings.
+function invalidArgs(data, code) {
+  if (code === 202) return true;
+  const detail = typeof data === 'string' ? data : data && (data.message || data.data);
+  return typeof detail === 'string' && detail.indexOf('invalid args') >= 0;
+}
+
 // Remove only exact duplicate guidance and Gaode's fixed status label; keep all other text.
 function details(view) {
   if (!view.live) return view.rawText === view.instruction ? '' : view.rawText;
@@ -147,4 +155,4 @@ function restLayout(view, warning, settings) {
     restTop: (480 - restHeight) / 2 };
 }
 
-module.exports = { lines, errorText, details, layout, navigationText, navigationLayout, restLayout, typography };
+module.exports = { lines, errorText, invalidArgs, details, layout, navigationText, navigationLayout, restLayout, typography };

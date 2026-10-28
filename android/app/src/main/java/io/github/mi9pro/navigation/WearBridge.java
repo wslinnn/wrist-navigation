@@ -94,11 +94,11 @@ public final class WearBridge {
 
     public boolean enabled() { return preferences.getBoolean("enabled", false); }
     public boolean autoOpenEnabled() { return preferences.getBoolean("auto_open", true); }
-    public boolean keepScreenOnEnabled() { return preferences.getBoolean("keep_screen_on", true); }
-    public void setKeepScreenOnEnabled(boolean value) {
-        preferences.edit().putBoolean("keep_screen_on", value).apply();
-        sendLatest();
-    }
+  public boolean keepScreenOnEnabled() { return preferences.getBoolean("keep_screen_on", true); }
+  public void setKeepScreenOnEnabled(boolean value) {
+    preferences.edit().putBoolean("keep_screen_on", value).apply();
+    sendLatest();
+  }
     public long pollIntervalMs() { return "active".equals(realLatest.status) ? sendPolicy.nextReadDelay(SystemClock.elapsedRealtime()) : 60000; }
     public String navigationStatus() { return realLatest.status; }
     public boolean hasConnectedNode() { return nodeId != null; }

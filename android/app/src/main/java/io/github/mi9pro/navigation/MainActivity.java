@@ -36,8 +36,8 @@ import java.util.ArrayList;
 public final class MainActivity extends Activity {
     private WearBridge bridge;
     private TextView status, syncDetail, connectionDetail, action;
-    private Switch sync;
-    private Dialog sheet;
+  private Switch sync;
+  private Dialog sheet;
     private boolean dark;
     private int background, surface, ink, muted, line, accent, accentInk;
     private final Runnable refreshUi = this::render;
@@ -214,15 +214,15 @@ public final class MainActivity extends Activity {
         }
     }
 
-    private void settings() {
-        LinearLayout options = sheetContent("导航偏好", "按你的习惯，调整腕上体验");
-        preference(options, "自动打开手环导航", "每次开始导航时打开一次", bridge.autoOpenEnabled(), bridge::setAutoOpenEnabled);
-        divider(options, 0);
-        preference(options, "导航时手环常亮", "关闭后可减少屏幕耗电", bridge.keepScreenOnEnabled(), bridge::setKeepScreenOnEnabled);
-        TextView version = label("腕上导航  " + BuildConfig.VERSION_NAME, 12, muted, false);
-        options.addView(version, space(-1, -2, 16));
-        showSheet(options);
-    }
+  private void settings() {
+    LinearLayout options = sheetContent("导航偏好", "按你的习惯，调整腕上体验");
+    preference(options, "自动打开手环导航", "每次开始导航时打开一次", bridge.autoOpenEnabled(), bridge::setAutoOpenEnabled);
+    divider(options, 0);
+    preference(options, "导航时手环常亮", "关闭后可减少屏幕耗电", bridge.keepScreenOnEnabled(), bridge::setKeepScreenOnEnabled);
+    TextView version = label("腕上导航  " + BuildConfig.VERSION_NAME, 12, muted, false);
+    options.addView(version, space(-1, -2, 16));
+    showSheet(options);
+  }
 
     private void connectionSettings() {
         LinearLayout options = sheetContent("连接与权限", "手机连接小米运动健康后即可同步");

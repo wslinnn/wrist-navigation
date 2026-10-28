@@ -1,25 +1,25 @@
 <template>
   <div class="page">
     <div class="home" if="{{ !settingsOpen }}">
-      <text class="demo-label" if="{{ demo }}" style="font-size: {{ auxiliarySize }}px; font-family: {{ fontFamily }};">演示 · 非真实导航</text>
+      <text class="demo-label" if="{{ demo }}" style="font-size: {{ auxiliarySize }}px;">演示 · 非真实导航</text>
       <div class="navigation-stage" if="{{ guidance }}" style="top: {{ contentTop }}px; height: {{ contentHeight }}px;">
         <image class="arrow" src="{{ arrowSrc }}" style="left: {{ arrowLeft }}px; width: {{ arrowSize }}px; height: {{ arrowSize }}px;"></image>
         <list class="guidance-list" style="top: {{ guidanceTop }}px; height: {{ guidanceHeight }}px;">
           <list-item for="{{ guidanceLines }}" type="guidance" class="guidance-row" style="height: {{ rowHeight }}px;">
-            <text class="guidance-text" style="height: {{ rowHeight }}px; line-height: {{ rowHeight }}px; font-size: {{ fontSize }}px; font-family: {{ guidanceFontFamily }};">{{ $item }}</text>
+            <text class="guidance-text" style="height: {{ rowHeight }}px; line-height: {{ rowHeight }}px; font-size: {{ fontSize }}px;">{{ $item }}</text>
           </list-item>
         </list>
       </div>
       <div class="rest" if="{{ !guidance }}" style="top: {{ restTop }}px; height: {{ restHeight }}px;">
         <div class="rest-titles" style="height: {{ restTitleHeight }}px;">
-          <text for="{{ titleLines }}" class="rest-title" style="height: {{ titleHeight }}px; line-height: {{ titleHeight }}px; font-size: {{ fontSize }}px; font-family: {{ fontFamily }};">{{ $item }}</text>
+          <text for="{{ titleLines }}" class="rest-title" style="height: {{ titleHeight }}px; line-height: {{ titleHeight }}px; font-size: {{ fontSize }}px;">{{ $item }}</text>
         </div>
         <div class="rest-hints" style="top: {{ hintTop }}px; height: {{ hintsHeight }}px;">
-          <text for="{{ hintLines }}" class="rest-hint" style="height: {{ hintHeight }}px; line-height: {{ hintHeight }}px; font-size: {{ hintSize }}px; font-family: {{ fontFamily }};">{{ $item }}</text>
+          <text for="{{ hintLines }}" class="rest-hint" style="height: {{ hintHeight }}px; line-height: {{ hintHeight }}px; font-size: {{ hintSize }}px;">{{ $item }}</text>
         </div>
         <list class="details" if="{{ hasDetails }}" style="top: {{ detailsTop }}px; height: {{ detailsHeight }}px;">
           <list-item for="{{ rawLines }}" type="detail" class="detail-row" style="height: {{ hintHeight }}px;">
-            <text class="raw" style="height: {{ hintHeight }}px; line-height: {{ hintHeight }}px; font-size: {{ hintSize }}px; font-family: {{ detailsFontFamily }};">{{ $item }}</text>
+            <text class="raw" style="height: {{ hintHeight }}px; line-height: {{ hintHeight }}px; font-size: {{ hintSize }}px;">{{ $item }}</text>
           </list-item>
         </list>
       </div>
@@ -28,55 +28,39 @@
       </div>
     </div>
     <div class="settings" if="{{ settingsOpen }}">
-      <text class="back" onclick="settingsBack">‹</text>
-      <text class="settings-title" style="font-size: {{ fontSize }}px; height: {{ titleHeight }}px; line-height: {{ titleHeight }}px; font-family: {{ fontFamily }};">{{ fontPickerOpen ? '选择字体' : '显示设置' }}</text>
-      <list class="settings-list" if="{{ !fontPickerOpen }}" style="top: {{ settingsListTop }}px; height: {{ settingsListHeight }}px;">
-        <list-item type="font" class="font-row" style="height: {{ fontRowHeight }}px;">
-          <div class="font-selector" onclick="openFonts" style="height: {{ fontSelectorHeight }}px;">
-            <text class="font-label" style="height: {{ fontSelectorHeight }}px; line-height: {{ fontSelectorHeight }}px; font-size: {{ labelSize }}px; font-family: {{ fontFamily }};">字体</text>
-            <text class="font-name" style="height: {{ fontSelectorHeight }}px; line-height: {{ fontSelectorHeight }}px; font-size: {{ labelSize }}px; font-family: {{ fontFamily }};">{{ fontName }}</text>
-            <text class="font-chevron" style="height: {{ fontSelectorHeight }}px; line-height: {{ fontSelectorHeight }}px;">›</text>
-          </div>
-        </list-item>
+      <text class="back" onclick="closeSettings">‹</text>
+      <text class="settings-title" style="font-size: {{ fontSize }}px; height: {{ titleHeight }}px; line-height: {{ titleHeight }}px;">显示设置</text>
+      <list class="settings-list" style="top: {{ settingsListTop }}px; height: {{ settingsListHeight }}px;">
         <list-item type="font-size" class="setting-block font-size-row" style="height: {{ settingRowHeight }}px;">
-          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px; font-family: {{ fontFamily }};">文字大小</text>
+          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px;">文字大小</text>
           <div class="stepper" style="top: {{ controlTop }}px; height: {{ buttonHeight }}px;">
             <text class="adjust decrease" onclick="adjust('fontSize', -1)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">−</text>
-            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px; font-family: {{ fontFamily }};">{{ fontSize }}</text>
+            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px;">{{ fontSize }}</text>
             <text class="adjust increase" onclick="adjust('fontSize', 1)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">+</text>
           </div>
         </list-item>
         <list-item type="arrow-size" class="setting-block arrow-size-row" style="height: {{ settingRowHeight }}px;">
-          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px; font-family: {{ fontFamily }};">箭头大小</text>
+          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px;">箭头大小</text>
           <div class="stepper" style="top: {{ controlTop }}px; height: {{ buttonHeight }}px;">
             <text class="adjust decrease" onclick="adjust('arrowSize', -2)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">−</text>
-            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px; font-family: {{ fontFamily }};">{{ arrowSize }}</text>
+            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px;">{{ arrowSize }}</text>
             <text class="adjust increase" onclick="adjust('arrowSize', 2)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">+</text>
           </div>
         </list-item>
         <list-item type="arrow-weight" class="setting-block arrow-weight-row" style="height: {{ settingRowHeight }}px;">
-          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px; font-family: {{ fontFamily }};">箭头粗细</text>
+          <text class="setting-label" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px;">箭头粗细</text>
           <div class="stepper" style="top: {{ controlTop }}px; height: {{ buttonHeight }}px;">
             <text class="adjust decrease" onclick="adjust('arrowWeight', -1)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">−</text>
-            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px; font-family: {{ fontFamily }};">{{ arrowWeight }}</text>
+            <text class="setting-value" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ fontSize }}px;">{{ arrowWeight }}</text>
             <text class="adjust increase" onclick="adjust('arrowWeight', 1)" style="height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-size: {{ adjustSize }}px;">+</text>
           </div>
         </list-item>
         <list-item type="footer" class="settings-footer" style="height: {{ footerHeight }}px;">
-          <text class="save-status" style="font-size: {{ auxiliarySize }}px; height: {{ auxiliaryHeight }}px; line-height: {{ auxiliaryHeight }}px; font-family: {{ fontFamily }};">{{ saveStatus }}</text>
-          <text class="version" style="top: {{ auxiliaryHeight + 4 }}px; font-size: {{ auxiliarySize }}px; height: {{ auxiliaryHeight }}px; line-height: {{ auxiliaryHeight }}px; font-family: {{ fontFamily }};">腕上导航 v{{ versionName }}</text>
+          <text class="save-status" style="font-size: {{ auxiliarySize }}px; height: {{ auxiliaryHeight }}px; line-height: {{ auxiliaryHeight }}px;">{{ saveStatus }}</text>
+          <text class="version" style="top: {{ auxiliaryHeight + 4 }}px; font-size: {{ auxiliarySize }}px; height: {{ auxiliaryHeight }}px; line-height: {{ auxiliaryHeight }}px;">腕上导航 v{{ versionName }}</text>
         </list-item>
         <list-item type="reset" class="reset-row" style="height: {{ buttonHeight + 16 }}px;">
-          <text class="reset-defaults" onclick="resetSettings" style="font-size: {{ labelSize }}px; height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px; font-family: {{ fontFamily }};">恢复默认</text>
-        </list-item>
-      </list>
-      <list class="font-options" if="{{ fontPickerOpen }}" style="top: {{ settingsListTop }}px; height: {{ settingsListHeight }}px;">
-        <list-item for="{{ fontOptions }}" type="font-choice" class="font-choice-row" style="height: {{ fontChoiceHeight + 12 }}px;">
-          <div class="font-choice" onclick="selectFont($item.id)" style="height: {{ fontChoiceHeight }}px; background-color: {{ font === $item.id ? '#253b2c' : '#101a14' }};">
-            <text class="choice-name" style="font-size: {{ labelSize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px; font-family: {{ fontFamily }};">{{ $item.name }}</text>
-            <text class="choice-selected" if="{{ font === $item.id }}" style="font-size: {{ auxiliarySize }}px; height: {{ labelHeight }}px; line-height: {{ labelHeight }}px;">已选</text>
-            <text class="choice-sample" style="top: {{ labelHeight + 8 }}px; font-family: {{ $item.family }}; font-size: {{ fontSize }}px; height: {{ titleHeight }}px; line-height: {{ titleHeight }}px;">直行200米</text>
-          </div>
+          <text class="reset-defaults" onclick="resetSettings" style="font-size: {{ labelSize }}px; height: {{ buttonHeight }}px; line-height: {{ buttonHeight }}px;">恢复默认</text>
         </list-item>
       </list>
     </div>
@@ -95,6 +79,19 @@ let receivedAt = 0
 let connected = false
 let timer = null
 let connectionError = ''
+// Device firmware decides the accepted send payload form; keep it across page re-creation.
+let sendAsObject = false
+let lastGuidanceKey = null
+let screenLit = false
+let vibrator
+// The vibrator feature is absent on some band firmware; a failed probe stays disabled.
+function buzz(mode) {
+  if (vibrator === false) return
+  try {
+    if (!vibrator) vibrator = require('@system.vibrator')
+    vibrator.vibrate({ mode })
+  } catch (error) { vibrator = false }
+}
 let alive = false
 let visible = false
 let screenRequested = false
@@ -104,21 +101,14 @@ let screenError = ''
 export default {
   private: {
     settingsOpen: false,
-    font: settings.DEFAULTS.font,
     fontSize: settings.DEFAULTS.fontSize,
     arrowSize: settings.DEFAULTS.arrowSize,
     arrowWeight: settings.DEFAULTS.arrowWeight,
-    fontPickerOpen: false,
-    fontOptions: settings.FONT_OPTIONS,
-    fontFamily: 'sans-serif',
-    guidanceFontFamily: 'sans-serif',
-    detailsFontFamily: 'sans-serif',
-    fontName: '系统默认',
     labelSize: 24, hintSize: 22, auxiliarySize: 18,
     titleHeight: 42, labelHeight: 28, hintHeight: 31, auxiliaryHeight: 23,
     buttonHeight: 52, controlTop: 32, settingRowHeight: 96,
-    fontSelectorHeight: 44, fontRowHeight: 56, footerHeight: 50,
-    adjustSize: 35, fontChoiceHeight: 86,
+    footerHeight: 50,
+    adjustSize: 35,
     settingsListTop: 66, settingsListHeight: 398,
     titleLines: [], restTitleHeight: 42, hintTop: 54, hintsHeight: 62,
     saveStatus: '调整后自动保存',
@@ -155,7 +145,6 @@ export default {
     if (preferenceStore) preferenceStore.dispose()
     preferenceStore = null
     this.settingsOpen = false
-    this.fontPickerOpen = false
     this.applySettings(settings.DEFAULTS)
     latest = null
     receivedAt = 0
@@ -164,6 +153,7 @@ export default {
     visible = false
     screenRequested = false
     screenError = ''
+    lastGuidanceKey = null
     alive = true
     this.paint()
   },
@@ -183,9 +173,6 @@ export default {
   },
   applySettings(value) {
     const checked = settings.normalize(value)
-    this.font = checked.font
-    this.fontName = settings.fontOption(checked.font).name
-    this.fontFamily = settings.fontOption(checked.font).family
     const type = presentation.typography(checked.fontSize)
     for (const field of Object.keys(type)) this[field] = type[field]
     this.settingsListTop = Math.max(66, 16 + type.titleHeight + 8)
@@ -203,7 +190,7 @@ export default {
     this.saveSettings(checked)
   },
   currentSettings() {
-    return { font: this.font, fontSize: this.fontSize, arrowSize: this.arrowSize, arrowWeight: this.arrowWeight }
+    return { fontSize: this.fontSize, arrowSize: this.arrowSize, arrowWeight: this.arrowWeight }
   },
   saveSettings(value) {
     if (!alive) return
@@ -214,22 +201,10 @@ export default {
     else this.saveStatus = '本次调整无法保存'
   },
   resetSettings() { this.saveSettings(settings.DEFAULTS) },
-  openFonts() { this.fontPickerOpen = true },
-  selectFont(id) {
-    if (!alive || settings.FONTS.indexOf(id) < 0) return
-    const value = this.currentSettings()
-    value.font = id
-    this.saveSettings(value)
-    this.fontPickerOpen = false
-  },
-  openSettings() { this.settingsOpen = true; this.fontPickerOpen = false; this.paint() },
-  closeSettings() { this.fontPickerOpen = false; this.settingsOpen = false; this.paint() },
-  settingsBack() {
-    if (this.fontPickerOpen) this.fontPickerOpen = false
-    else this.closeSettings()
-  },
+  openSettings() { this.settingsOpen = true; this.paint() },
+  closeSettings() { this.settingsOpen = false; this.paint() },
   onBackPress() {
-    if (this.settingsOpen) { this.settingsBack(); return true }
+    if (this.settingsOpen) { this.closeSettings(); return true }
     return false
   },
   onShow() {
@@ -250,6 +225,14 @@ export default {
     visible = false
     // Release again if the previous off request failed or is still pending.
     this.keepScreenOn(false, true)
+    if (screenLit) {
+      screenLit = false
+      try {
+        const brightness = require('@system.brightness')
+        // Firmware-level reset for a keep-screen-on release that never landed.
+        if (typeof brightness.systembrightnessrecovery === 'function') brightness.systembrightnessrecovery()
+      } catch (error) { /* Older firmware has no recovery entry. */ }
+    }
     if (timer) clearTimeout(timer)
     timer = null
     if (connection) {
@@ -266,12 +249,33 @@ export default {
   ready() {
     this.send({ v: 1, type: 'ready' })
   },
+  // Heartbeats resend the same instruction; only a genuinely new step or an
+  // arrival buzzes. A fresh page buzzes once on the first live instruction.
+  announce(packet) {
+    const key = packet.status === 'ended' ? 'ended' : packet.status === 'active' ? packet.instruction : null
+    if (key === null || key === lastGuidanceKey) return
+    lastGuidanceKey = key
+    buzz(key === 'ended' ? 'long' : 'short')
+  },
   send(message) {
+    this.transmit(message, sendAsObject, true)
+  },
+  // Vela 5 firmware (Band 10 Pro) types send data as an object and rejects the
+  // JSON string with 202 "invalid args"; older firmware only accepts strings.
+  transmit(message, asObject, canSwitch) {
     if (!connection || !alive) return
+    const fail = (data, code) => {
+      if (canSwitch && presentation.invalidArgs(data, code)) {
+        sendAsObject = !asObject
+        this.transmit(message, !asObject, false)
+        return
+      }
+      this.failed('发送失败', data, code)
+    }
     try {
       connection.send({
-        data: JSON.stringify(message),
-        fail: (data, code) => this.failed('发送失败', data, code)
+        data: asObject ? message : JSON.stringify(message),
+        fail
       })
     } catch (error) { this.failed('发送失败', error) }
   },
@@ -308,6 +312,7 @@ export default {
           connectionError = ''
           if (visible) this.paint()
           this.send({ v: 1, type: 'ack', session: packet.session, seq: packet.seq })
+          this.announce(packet)
         }
       }
       connection.getReadyState({
@@ -337,6 +342,7 @@ export default {
   keepScreenOn(value, force) {
     if (!force && screenRequested === value) return
     screenRequested = value
+    if (value) screenLit = true
     screenError = ''
     const revision = ++screenRevision
     const fail = (data, code) => {
@@ -376,9 +382,7 @@ export default {
     for (const field of ['header', 'guidance', 'statusColor', 'distanceValue', 'distanceUnit', 'distanceSize', 'hint']) {
       if (this[field] !== layout[field]) this[field] = layout[field]
     }
-    this.guidanceFontFamily = settings.fontForText(this.font, navigation.guidanceLines.join(''))
     const rest = presentation.restLayout(view, screenError, this)
-    this.detailsFontFamily = settings.fontForText(this.font, rest.rawLines.join(''))
     if (rest.titleLines.join('\n') !== this.titleLines.join('\n')) this.titleLines = rest.titleLines
     for (const field of ['restTitleHeight', 'hintTop', 'hintsHeight', 'hasDetails', 'detailsTop', 'detailsHeight', 'restTop', 'restHeight']) {
       if (this[field] !== rest[field]) this[field] = rest[field]
@@ -391,9 +395,6 @@ export default {
 </script>
 
 <style>
-@font-face { font-family: BandSong; src: url('/common/fonts/BandSong.ttf'); }
-@font-face { font-family: BandKai; src: url('/common/fonts/BandKai.ttf'); }
-@font-face { font-family: BandRound; src: url('/common/fonts/BandRound.ttf'); }
 .page { position: relative; width: 336px; height: 480px; background-color: #000000; }
 .home { position: absolute; top: 0px; left: 0px; width: 336px; height: 480px; }
 .navigation-stage { position: absolute; left: 24px; width: 288px; height: 110px; }
@@ -416,11 +417,6 @@ export default {
 .back { position: absolute; left: 20px; top: 14px; width: 44px; height: 48px; color: #ffffff; font-size: 38px; line-height: 48px; text-align: center; }
 .settings-title { position: absolute; left: 76px; top: 16px; width: 236px; color: #ffffff; }
 .settings-list { position: absolute; left: 24px; top: 66px; width: 288px; height: 398px; }
-.font-row { width: 288px; height: 56px; }
-.font-selector { position: absolute; top: 0px; left: 0px; width: 288px; height: 44px; background-color: #17261c; border-radius: 12px; }
-.font-label { position: absolute; left: 12px; top: 0px; width: 80px; color: #ffffff; }
-.font-name { position: absolute; left: 92px; top: 0px; width: 164px; color: #ffffff; text-align: right; }
-.font-chevron { position: absolute; left: 262px; top: 0px; width: 18px; color: #d9e6dd; font-size: 28px; text-align: center; }
 .setting-block { width: 288px; height: 96px; }
 .setting-label { position: absolute; top: 0px; left: 0px; width: 288px; color: #b7c9bd; }
 .stepper { position: absolute; left: 0px; width: 288px; height: 52px; }
@@ -433,10 +429,4 @@ export default {
 .version { position: absolute; left: 0px; width: 288px; color: #73857a; text-align: center; }
 .reset-row { width: 288px; height: 68px; }
 .reset-defaults { position: absolute; left: 24px; top: 8px; width: 240px; color: #b7c9bd; background-color: #101a14; border-radius: 12px; text-align: center; }
-.font-options { position: absolute; left: 24px; top: 66px; width: 288px; height: 398px; }
-.font-choice-row { width: 288px; height: 98px; }
-.font-choice { position: absolute; left: 0px; top: 0px; width: 288px; height: 86px; border-radius: 12px; }
-.choice-name { position: absolute; left: 12px; top: 6px; width: 204px; color: #b7c9bd; }
-.choice-selected { position: absolute; left: 218px; top: 6px; width: 58px; color: #80f5be; text-align: right; }
-.choice-sample { position: absolute; left: 12px; width: 264px; color: #ffffff; }
 </style>

@@ -10,7 +10,7 @@ const bundle = {
   script: source.match(/<script>([\s\S]*?)<\/script>/)[1].replace('export default', 'module.exports ='),
   modules: {}, images: {}
 };
-for (const name of ['protocol', 'presentation', 'settings', 'font-coverage']) {
+for (const name of ['protocol', 'presentation', 'settings']) {
   bundle.modules['../../common/' + name] = fs.readFileSync(path.join(root, 'wearable/src/common', name + '.js'), 'utf8');
 }
 bundle.modules['../../manifest.json'] = 'module.exports = ' + JSON.stringify(manifest);
@@ -23,8 +23,7 @@ function images(directory) {
   }
 }
 images(path.join(root, 'wearable/src/common'));
-const styles = source.match(/<style>([\s\S]*?)<\/style>/)[1].replace(/url\('\/common\/fonts\/([^']+)'\)/g,
-  (_, name) => "url('data:font/ttf;base64," + fs.readFileSync(path.join(root, 'wearable/src/common/fonts', name)).toString('base64') + "')");
+const styles = source.match(/<style>([\s\S]*?)<\/style>/)[1];
 const runtime = fs.readFileSync(path.join(__dirname, 'preview-runtime.js'), 'utf8');
 const html = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>腕上导航 · ${manifest.versionName} 本地调试</title><style>
