@@ -66,7 +66,7 @@ connection.onmessage({ data: JSON.stringify({ v: 1, type: 'navigation', session:
   status: 'active', title: '高德地图', rawText: '右转进入示例路', maneuver: 'right', instruction: '右转', distance: '200 米' }) });
 assert.equal(page.distance, '200 米');
 assert.equal(page.status, '高德导航');
-assert.deepEqual(vibrations, ['short'], 'a new instruction buzzes once');
+assert.deepEqual(vibrations, ['short'], 'the first guidance packet buzzes to confirm the trip has started');
 assert.equal(typeof page.localDemo, 'undefined');
 assert.ok(manifest.features.some(feature => feature.name === 'system.brightness'));
 assert.deepEqual(screenRequests, [true]);
@@ -127,9 +127,12 @@ assert.equal(page.guidanceLines.join(''), '右转进入示例路');
 assert.ok(archive.getEntry('common/settings.png'));
 for (let i = 0; i < 3; i++) { click('settings-entry'); click('back'); }
 connection.onmessage({ data: JSON.stringify({ v: 1, type: 'navigation', session: 'package-check', seq: 2,
+  status: 'active', title: '高德地图', rawText: '前方50米右转', maneuver: 'right', instruction: '右转', distance: '50 米' }) });
+assert.deepEqual(vibrations, ['short', 'short'], 'approaching the turn buzzes once');
+connection.onmessage({ data: JSON.stringify({ v: 1, type: 'navigation', session: 'package-check', seq: 3,
   status: 'ended', title: '高德地图', rawText: '已到达目的地', maneuver: 'arrive', instruction: '导航已结束', distance: '' }) });
 assert.equal(page.status, '导航结束');
-assert.deepEqual(vibrations, ['short', 'long'], 'arrival buzzes long without repeating the turn buzz');
+assert.deepEqual(vibrations, ['short', 'short', 'long'], 'arrival buzzes long without repeating earlier buzzes');
 for (let weight = 4; weight <= 10; weight++) {
   for (const maneuver of ['left', 'right', 'straight', 'slight_left', 'slight_right', 'sharp_left', 'sharp_right', 'uturn', 'roundabout', 'arrive', 'unknown']) {
     assert.ok(archive.getEntry('common/arrows/' + weight + '/' + maneuver + '.png'));

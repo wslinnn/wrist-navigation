@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="home" if="{{ !settingsOpen }}">
+    <div class="home" if="{{ !settingsOpen }}" onclick="dismissExit">
       <text class="demo-label" if="{{ demo }}" style="font-size: {{ auxiliarySize }}px;">演示 · 非真实导航</text>
       <div class="navigation-stage" if="{{ guidance }}" style="top: {{ contentTop }}px; height: {{ contentHeight }}px;">
         <image class="arrow" src="{{ arrowSrc }}" style="left: {{ arrowLeft }}px; width: {{ arrowSize }}px; height: {{ arrowSize }}px;"></image>
@@ -22,6 +22,7 @@
             <text class="raw" style="height: {{ hintHeight }}px; line-height: {{ hintHeight }}px; font-size: {{ hintSize }}px;">{{ $item }}</text>
           </list-item>
         </list>
+        <text class="exit-hint" if="{{ exitHint }}" style="top: {{ restTop + restHeight + 10 }}px; font-size: {{ auxiliarySize }}px; line-height: {{ auxiliaryHeight }}px; height: {{ auxiliaryHeight }}px;">{{ exitHint }}</text>
       </div>
       <div class="settings-entry" onclick="openSettings">
         <image class="settings-icon" src="/common/settings.png"></image>
@@ -70,6 +71,7 @@
 <script>
 const protocol = require('../../common/protocol')
 const presentation = require('../../common/presentation')
+const haptics = require('../../common/haptics').create()
 const settings = require('../../common/settings')
 const manifest = require('../../manifest.json')
 let preferenceStore = null
@@ -81,8 +83,9 @@ let timer = null
 let connectionError = ''
 // Device firmware decides the accepted send payload form; keep it across page re-creation.
 let sendAsObject = false
-let lastGuidanceKey = null
 let screenLit = false
+let exitTimer = null
+let exitDismissed = false
 let vibrator
 // The vibrator feature is absent on some band firmware; a failed probe stays disabled.
 function buzz(mode) {
@@ -101,6 +104,7 @@ let screenError = ''
 export default {
   private: {
     settingsOpen: false,
+    exitHint: '',
     fontSize: settings.DEFAULTS.fontSize,
     arrowSize: settings.DEFAULTS.arrowSize,
     arrowWeight: settings.DEFAULTS.arrowWeight,
@@ -153,7 +157,6 @@ export default {
     visible = false
     screenRequested = false
     screenError = ''
-    lastGuidanceKey = null
     alive = true
     this.paint()
   },
@@ -201,11 +204,40 @@ export default {
     else this.saveStatus = '本次调整无法保存'
   },
   resetSettings() { this.saveSettings(settings.DEFAULTS) },
-  openSettings() { this.settingsOpen = true; this.paint() },
+  openSettings() { exitDismissed = true; this.cancelExit(); this.settingsOpen = true; this.paint() },
   closeSettings() { this.settingsOpen = false; this.paint() },
   onBackPress() {
     if (this.settingsOpen) { this.closeSettings(); return true }
     return false
+  },
+  // After navigation ends the app returns to the watchface on a visible
+  // countdown; any touch keeps it open (platform convention for task apps).
+  scheduleExit() {
+    if (exitTimer) return
+    let left = 5
+    const tick = () => {
+      if (!alive) { exitTimer = null; return }
+      if (this.settingsOpen) { exitDismissed = true; this.cancelExit(); return }
+      if (left <= 0) {
+        exitTimer = null
+        this.exitHint = ''
+        try { require('@system.router').back() } catch (error) { /* Staying open beats a failed exit. */ }
+        return
+      }
+      this.exitHint = '轻触屏幕停留 · ' + left + ' 秒后返回表盘'
+      left--
+      exitTimer = setTimeout(tick, 1000)
+    }
+    tick()
+  },
+  cancelExit() {
+    if (exitTimer) { clearTimeout(exitTimer); exitTimer = null }
+    this.exitHint = ''
+  },
+  dismissExit() {
+    exitDismissed = true
+    this.cancelExit()
+    this.paint()
   },
   onShow() {
     visible = true
@@ -235,6 +267,8 @@ export default {
     }
     if (timer) clearTimeout(timer)
     timer = null
+    if (exitTimer) { clearTimeout(exitTimer); exitTimer = null }
+    this.exitHint = ''
     if (connection) {
       try {
         connection.onmessage = () => {}
@@ -248,14 +282,6 @@ export default {
   },
   ready() {
     this.send({ v: 1, type: 'ready' })
-  },
-  // Heartbeats resend the same instruction; only a genuinely new step or an
-  // arrival buzzes. A fresh page buzzes once on the first live instruction.
-  announce(packet) {
-    const key = packet.status === 'ended' ? 'ended' : packet.status === 'active' ? packet.instruction : null
-    if (key === null || key === lastGuidanceKey) return
-    lastGuidanceKey = key
-    buzz(key === 'ended' ? 'long' : 'short')
   },
   send(message) {
     this.transmit(message, sendAsObject, true)
@@ -312,7 +338,14 @@ export default {
           connectionError = ''
           if (visible) this.paint()
           this.send({ v: 1, type: 'ack', session: packet.session, seq: packet.seq })
-          this.announce(packet)
+          const mode = haptics.update(packet)
+          if (mode) buzz(mode)
+          if (packet.status === 'ended') {
+            if (!exitDismissed) this.scheduleExit()
+          } else {
+            exitDismissed = false
+            this.cancelExit()
+          }
         }
       }
       connection.getReadyState({
@@ -413,6 +446,7 @@ export default {
 .details { position: absolute; left: 0px; width: 288px; height: 84px; }
 .detail-row { width: 288px; height: 31px; }
 .raw { width: 288px; color: #9aafa0; text-align: center; }
+.exit-hint { position: absolute; left: 24px; width: 288px; color: #d4b57b; text-align: center; }
 .settings { position: absolute; top: 0px; left: 0px; width: 336px; height: 480px; background-color: #000000; }
 .back { position: absolute; left: 20px; top: 14px; width: 44px; height: 48px; color: #ffffff; font-size: 38px; line-height: 48px; text-align: center; }
 .settings-title { position: absolute; left: 76px; top: 16px; width: 236px; color: #ffffff; }

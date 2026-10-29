@@ -21,6 +21,7 @@ function launch(options = {}) {
   const screenCallbacks = [];
   const vibrations = [];
   const recoveries = [];
+  const backs = [];
   const stored = [];
   let storageRead;
   const connection = {
@@ -67,6 +68,10 @@ function launch(options = {}) {
         if (options.vibratorMissing) throw new Error('vibrator unavailable');
         return { vibrate({ mode }) { vibrations.push(mode); } };
       }
+      if (name === '@system.router') {
+        if (options.routerMissing) throw new Error('router unavailable');
+        return { back() { backs.push(1); } };
+      }
       if (name === '@system.interconnect') {
         loads++;
         if (options.loadThrows) throw new Error('API missing');
@@ -82,7 +87,7 @@ function launch(options = {}) {
   const definition = context.module.exports;
   const page = Object.assign({}, definition.private, definition);
   page.onInit();
-  return { page, connection, sent, pending, screenRequests, screenCallbacks, vibrations, recoveries, stored, storageRead: () => storageRead, loads: () => loads,
+  return { page, connection, sent, pending, screenRequests, screenCallbacks, vibrations, recoveries, backs, stored, storageRead: () => storageRead, loads: () => loads,
     advance(ms) { now += ms; if (tick && now >= due) { const run = tick; tick = null; timerRuns++; run(); } },
     timerRuns: () => timerRuns, running: () => !!tick, rawSends: () => rawSends };
 }
@@ -287,8 +292,9 @@ test('idle and hidden pages have no timer and hidden packets do not repaint', ()
   app.page.onShow();
   assert.equal(app.page.distance, '100 米');
   app.connection.onmessage({ data: JSON.stringify({ ...navigation(3), status: 'ended' }) });
-  assert.equal(app.running(), false);
-  app.advance(60000);
+  assert.equal(app.running(), true, 'ended pages run the return-to-watchface countdown');
+  for (let i = 0; i < 6; i++) app.advance(1000);
+  assert.equal(app.running(), false, 'the countdown finishes and exits');
   assert.equal(app.page.status, '导航结束');
 });
 
@@ -388,22 +394,28 @@ test('legacy font settings load silently and typography still scales', () => {
   assert.equal(restored.page.fontSize, 44);
 });
 
-test('new instructions buzz once, unchanged heartbeats stay silent and arrival buzzes long', () => {
+test('near-turn proximity buzzes once per segment and direction changes buzz immediately', () => {
   const app = launch({ connected: true });
   app.page.onReady(); app.page.onShow();
-  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
-  assert.deepEqual(app.vibrations, ['short']);
-  app.advance(8000);
-  app.connection.onmessage({ data: JSON.stringify(navigation(2)) });
-  assert.deepEqual(app.vibrations, ['short'], 'unchanged heartbeats must not re-buzz');
-  app.connection.onmessage({ data: JSON.stringify({ ...navigation(3), instruction: '左转', maneuver: 'left', rawText: '前方100米左转' }) });
-  assert.deepEqual(app.vibrations, ['short', 'short']);
-  app.connection.onmessage({ data: JSON.stringify({ ...navigation(4), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
-  assert.deepEqual(app.vibrations, ['short', 'short', 'long']);
-  app.connection.onmessage({ data: JSON.stringify({ ...navigation(5), status: 'idle', instruction: '等待导航' }) });
-  assert.deepEqual(app.vibrations, ['short', 'short', 'long'], 'non-guidance states never buzz');
-  app.connection.onmessage({ data: JSON.stringify(navigation(6)) });
-  assert.deepEqual(app.vibrations, ['short', 'short', 'long', 'short'], 'a resumed trip buzzes again');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(1), distance: '200 米' }) });
+  assert.deepEqual(app.vibrations, ['short'], 'the first guidance packet confirms the trip has started');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(2), distance: '50 米' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short'], 'approaching a turn buzzes once');
+  for (const distance of ['50 米', '49 米', '48 米']) {
+    app.connection.onmessage({ data: JSON.stringify({ ...navigation(3), distance }) });
+  }
+  assert.deepEqual(app.vibrations, ['short', 'short'], 'heartbeats and jitter must not re-buzz');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(4), distance: '140 米' }) });
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(5), distance: '40 米' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'short'], 'a distance reset re-arms the near-turn alert');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(6), instruction: '左转', maneuver: 'left', rawText: '前方100米左转' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'short', 'short'], 'a direction change buzzes immediately');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(7), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '导航结束' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'short', 'short'], 'plain cancellation is silent');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(8), instruction: '右转', maneuver: 'right', distance: '30 米', rawText: '前方30米右转' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'short', 'short', 'short'], 'a new trip after cancellation re-arms');
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(9), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地' }) });
+  assert.deepEqual(app.vibrations, ['short', 'short', 'short', 'short', 'short', 'long'], 'explicit arrival buzzes long');
 });
 
 test('a missing vibrator never blocks navigation rendering', () => {
@@ -413,6 +425,38 @@ test('a missing vibrator never blocks navigation rendering', () => {
   assert.deepEqual(app.vibrations, []);
   assert.equal(app.page.status, '高德导航');
   assert.equal(app.page.distance, '200 米');
+});
+
+test('the end-page countdown returns to the watchface when it reaches zero', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(1), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
+  assert.ok(app.page.exitHint.includes('轻触屏幕停留'), 'the countdown is visible on the end page');
+  for (let i = 0; i < 6; i++) app.advance(1000);
+  assert.deepEqual(app.backs, [1], 'zero reaches the router back call');
+  assert.equal(app.page.exitHint, '');
+});
+
+test('touching to stay or a fresh trip cancels and re-arms the return countdown', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(1), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
+  app.page.dismissExit();
+  for (let i = 0; i < 10; i++) app.advance(1000);
+  assert.deepEqual(app.backs, [], 'touching to stay cancels the exit');
+  app.connection.onmessage({ data: JSON.stringify(navigation(2)) });
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(3), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
+  for (let i = 0; i < 6; i++) app.advance(1000);
+  assert.deepEqual(app.backs, [1], 'a fresh trip re-arms the next return');
+});
+
+test('settings open during the countdown cancels the exit', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(1), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '已到达目的地', distance: '' }) });
+  app.page.openSettings();
+  for (let i = 0; i < 10; i++) app.advance(1000);
+  assert.deepEqual(app.backs, [], 'settings interaction keeps the app open');
 });
 
 test('destroying a lit page runs the brightness recovery fallback once', () => {
