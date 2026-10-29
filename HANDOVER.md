@@ -13,8 +13,8 @@
 
 最佳实践审计（2026-10-29，对照官方 memory/business/start 三篇）：仅一处可操作项已实施——onDestroy 末尾 `global.runGC()`（try/catch + typeof 双保险，旧固件静默跳过）。其余全部合规：非 UI 数据均在 viewModel 外、条件赋值原地更新、四类定时器销毁全清、单页面零依赖零 console、模板绑定全为真动态（无 static 收益空间）、list 有硬上限、无轮询（getReadyState 为一次性连接检查，0.2.9 已删空闲轮询）、UI 先行有专门测试。已知可选未做：箭头 PNG 160×160 渲染 42×42（约 3.8x），可缩至 128×128 减包体约 30KB，收益小且需图像工具链，暂缓。
 
-版本：手环 0.2.10 / code 15 同号重建，手机 0.2.4 / code 9（均同签名覆盖安装，手环换装前先卸载）。本地验证：56/56 项 JS 测试（时钟/速度单测、顶栏与订阅生命周期、隐藏不重绘、拒权与缺模块降级、噪音清理断言）、RPK 内容/签名检查（含 geolocation feature/权限与首修渲染断言）、Android 单测/Lint/构建通过。交付：手环 `wearable/dist/io.github.mi9pro.navigation.debug.0.2.10.rpk`，202,177 字节，SHA-256 `7b14216506f4db681fab11fdf8ba6f070f819d87d76d1f56d84155378b3a8efc`（aiot 构建非确定性，同源重建哈希会变，以最新为准）；手机 `android/app/build/outputs/apk/debug/app-debug.apk`，799,868 字节，SHA-256 `3abdffbadee40e1b223f2b6ae24a9ecccfe891c2f962ce3001e79b9025d0493a`。
-待真机验证：顶部时钟/时速位置与字号、长指引下不被挤压、首次导航的定位权限弹窗、时速数值与静止归零、「| 高德导航中」清理效果。
+版本：手环 0.2.10 / code 15 同号重建，手机 0.2.4 / code 9（均同签名覆盖安装，手环换装前先卸载）。本地验证：56/56 项 JS 测试（时钟/速度单测、顶栏与订阅生命周期、隐藏不重绘、拒权与缺模块降级、噪音清理断言）、RPK 内容/签名检查（含 geolocation feature/权限与首修渲染断言）、Android 单测/Lint/构建通过。交付：手环 `wearable/dist/io.github.mi9pro.navigation.debug.0.2.10.rpk`，202,268 字节，SHA-256 `ae5158507aac9fe030b0d2df7e2545f7ef4e6541eddf78f2e7564d019bd6e07e`（aiot 构建非确定性，同源重建哈希会变，以最新为准）；手机 `android/app/build/outputs/apk/debug/app-debug.apk`，799,868 字节，SHA-256 `3abdffbadee40e1b223f2b6ae24a9ecccfe891c2f962ce3001e79b9025d0493a`。
+待真机验证：顶部时钟/时速位置与字号、长指引下不被挤压、首次导航的定位权限弹窗、「定位中」灰字到绿色时速的切换、时速数值与静止归零、「| 高德导航中」清理效果。
 教训：临时 patch 构建探测包后恢复源码，不能用 `git checkout --`（恢复点是 HEAD 而非主干工作区，本次曾误抹当天改动后从上下文重放恢复）；aiot 构建会清空 `dist/`，探测包等额外产物必须放 dist 之外；「参考他人实现」要连调用时序一起审——同步回调的 mock 暴露了真机异步路径掩盖的置位时序缺陷。
 教训：临时 patch 构建探测包后恢复源码，不能用 `git checkout --`（恢复点是 HEAD 而非主干工作区，本次曾误抹当天改动后从上下文重放恢复）；aiot 构建会清空 `dist/`，探测包等额外产物必须放 dist 之外。
 

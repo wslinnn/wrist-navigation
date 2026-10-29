@@ -88,7 +88,8 @@ function launch(options = {}) {
           getLocation(call) {
             geoGetCalls.push(call);
             if (options.geoFails) call.fail('denied', 201);
-            else call.success({ speed: options.geoSpeed != null ? options.geoSpeed : 0, accuracy: 10 });
+            // Default is a pending satellite search; geoInitialFix forces an immediate fix.
+            else if (options.geoInitialFix) call.success({ speed: options.geoSpeed != null ? options.geoSpeed : 0, accuracy: 10 });
           },
           subscribe(call) {
             geoSubscribeCalls.push(call);
@@ -497,11 +498,14 @@ test('speed subscribes on live navigation and follows gps samples', () => {
   assert.equal(app.geoSubscribeCalls.length, 0, 'no subscription before navigation');
   app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
   assert.equal(app.geoSubscribeCalls.length, 1);
-  assert.equal(app.page.speedText, '0km/h', 'the first fix reports standstill honestly');
+  assert.equal(app.page.speedText, '定位中', 'locating is stated instead of a blank corner');
+  assert.equal(app.page.speedLocating, true);
   app.geo({ speed: null });
-  assert.equal(app.page.speedText, '0km/h', 'a lost fix does not invent a value');
+  assert.equal(app.page.speedText, '定位中', 'a lost fix keeps the locating status, not an invented value');
+  assert.equal(app.page.speedLocating, true);
   app.geo({ speed: 5.4 });
   assert.equal(app.page.speedText, '19km/h');
+  assert.equal(app.page.speedLocating, false);
   app.geo({ speed: 0.1 });
   assert.equal(app.page.speedText, '0km/h', 'standstill drift shows a true zero');
   app.geo({ speed: -3 });

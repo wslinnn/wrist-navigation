@@ -12,7 +12,7 @@
       </div>
       <div class="top-bar" if="{{ clockVisible }}" style="top: 12px; height: {{ titleHeight }}px;">
         <text class="clock" style="font-size: {{ fontSize }}px; line-height: {{ titleHeight }}px;">{{ clockText }}</text>
-        <text class="speed" if="{{ speedText }}" style="font-size: {{ fontSize }}px; line-height: {{ titleHeight }}px;">{{ speedText }}</text>
+        <text class="speed" if="{{ speedText }}" style="font-size: {{ fontSize }}px; line-height: {{ titleHeight }}px; color: {{ speedLocating ? '#9aafa0' : '#80f5be' }};">{{ speedText }}</text>
       </div>
       <div class="rest" if="{{ !guidance }}" style="top: {{ restTop }}px; height: {{ restHeight }}px;">
         <div class="rest-titles" style="height: {{ restTitleHeight }}px;">
@@ -123,6 +123,7 @@ export default {
     clockText: '',
     clockVisible: false,
     speedText: '',
+    speedLocating: false,
     fontSize: settings.DEFAULTS.fontSize,
     arrowSize: settings.DEFAULTS.arrowSize,
     arrowWeight: settings.DEFAULTS.arrowWeight,
@@ -299,6 +300,8 @@ export default {
         success: data => { if (alive) this.applySpeed(data) },
         fail: () => { /* Speed is auxiliary; a refusal just keeps it hidden. */ }
       })
+      // The packet paint ran before this subscription existed; show 定位中 now.
+      this.paint()
     } catch (error) { geolocation = false }
   },
   stopSpeed() {
@@ -545,10 +548,13 @@ export default {
     // Once guidance stops being live the subscription is costing battery for nothing.
     if (!view.live && speedSubscribed) this.stopSpeed()
     let speed = ''
-    if (view.live && speedSubscribed && speedFix) {
-      speed = (now - lastSpeedSampleAt <= 5000 ? currentKmh : 0) + 'km/h'
+    if (view.live && speedSubscribed) {
+      // While locating, say so — a blank corner reads as a broken feature.
+      speed = speedFix ? (now - lastSpeedSampleAt <= 5000 ? currentKmh : 0) + 'km/h' : '定位中'
     }
     if (speed !== this.speedText) this.speedText = speed
+    const locating = speed === '定位中'
+    if (this.speedLocating !== locating) this.speedLocating = locating
   }
 }
 </script>
