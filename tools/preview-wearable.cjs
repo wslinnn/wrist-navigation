@@ -10,7 +10,7 @@ const bundle = {
   script: source.match(/<script>([\s\S]*?)<\/script>/)[1].replace('export default', 'module.exports ='),
   modules: {}, images: {}
 };
-for (const name of ['protocol', 'presentation', 'haptics', 'settings']) {
+for (const name of ['protocol', 'presentation', 'haptics', 'metrics', 'settings']) {
   bundle.modules['../../common/' + name] = fs.readFileSync(path.join(root, 'wearable/src/common', name + '.js'), 'utf8');
 }
 bundle.modules['../../manifest.json'] = 'module.exports = ' + JSON.stringify(manifest);

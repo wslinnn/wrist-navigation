@@ -14,6 +14,7 @@ assert.equal(manifest.versionName, sourceManifest.versionName);
 assert.equal(manifest.versionCode, sourceManifest.versionCode);
 let apiLoads = 0;
 let available = false;
+let subscribed = null;
 const connection = { getReadyState: callbacks => callbacks.success({ status: 1 }), send() {} };
 const screenRequests = [];
 const vibrations = [];
@@ -32,6 +33,11 @@ const system = {
       systembrightnessrecovery() { recoveries.push(1); }
     };
     if (name === '@app-module/system.vibrator') return { vibrate({ mode }) { vibrations.push(mode); } };
+    if (name === '@app-module/system.geolocation') return {
+      getLocation(call) { call.success({ speed: 5.4, accuracy: 10 }); },
+      subscribe(call) { subscribed = call.callback; },
+      unsubscribe() { subscribed = null; }
+    };
     if (available && name === '@app-module/system.interconnect') return { instance: () => connection };
     throw new Error('mock unavailable firmware API');
   }
@@ -69,6 +75,12 @@ assert.equal(page.status, '高德导航');
 assert.deepEqual(vibrations, ['short'], 'the first guidance packet buzzes to confirm the trip has started');
 assert.equal(typeof page.localDemo, 'undefined');
 assert.ok(manifest.features.some(feature => feature.name === 'system.brightness'));
+assert.ok(manifest.features.some(feature => feature.name === 'system.geolocation'), 'speed needs the geolocation feature');
+assert.ok((manifest.permissions || []).some(permission => permission.name === 'hapjs.permission.LOCATION'),
+  'geolocation is refused without the location permission');
+assert.match(page.clockText, /^\d{2}:\d{2}$/, 'live navigation shows the top clock');
+assert.equal(page.clockVisible, true);
+assert.equal(page.speedText, '19km/h', 'the initial gps fix renders immediately');
 assert.deepEqual(screenRequests, [true]);
 const tree = page.template(page);
 const styles = Object.fromEntries(definition.style.map(rule => [rule[0][0][1], rule[1]]));

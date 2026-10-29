@@ -15,7 +15,7 @@ generate('preview-wearable.cjs');
 generate('preview-settings.cjs');
 let revision = 0;
 let timer;
-const inputs = ['wearable/src/pages/index/index.ux', 'wearable/src/common/presentation.js', 'wearable/src/common/protocol.js', 'wearable/src/common/settings.js', 'wearable/src/manifest.json', 'tools/preview-wearable.cjs', 'tools/preview-runtime.js', 'tools/preview-settings.cjs', 'tools/preview-settings.html', 'tools/preview-preferences.cjs'];
+const inputs = ['wearable/src/pages/index/index.ux', 'wearable/src/common/presentation.js', 'wearable/src/common/protocol.js', 'wearable/src/common/haptics.js', 'wearable/src/common/metrics.js', 'wearable/src/common/settings.js', 'wearable/src/manifest.json', 'tools/preview-wearable.cjs', 'tools/preview-runtime.js', 'tools/preview-settings.cjs', 'tools/preview-settings.html', 'tools/preview-preferences.cjs'];
 const watchers = inputs.map(file => fs.watch(path.join(root, file), () => {
   clearTimeout(timer);
   timer = setTimeout(() => {

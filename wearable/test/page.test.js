@@ -11,9 +11,9 @@ const source = fs.readFileSync(path.join(__dirname, '../src/pages/index/index.ux
 function launch(options = {}) {
   let now = 100000;
   let loads = 0;
-  let tick;
-  let due = 0;
   let timerRuns = 0;
+  const timers = new Map();
+  let timerSeq = 1;
   const sent = [];
   let rawSends = 0;
   const pending = [];
@@ -23,7 +23,17 @@ function launch(options = {}) {
   const recoveries = [];
   const backs = [];
   const stored = [];
+  const geoGetCalls = [];
+  const geoSubscribeCalls = [];
+  let geoUnsubscribes = 0;
+  let geoCallback = null;
   let storageRead;
+  // The page formats the strip clock from Date instances, so the mock must
+  // construct real dates from the controlled clock.
+  class FakeDate extends Date {
+    constructor(...args) { super(args.length ? args[0] : now); }
+    static now() { return now; }
+  }
   const connection = {
     getReadyState(callbacks) {
       if (options.stateThrows) throw new Error('state unavailable');
@@ -42,9 +52,9 @@ function launch(options = {}) {
   };
   const context = {
     module: { exports: {} },
-    Date: { now: () => now },
-    setTimeout: (callback, delay) => { tick = callback; due = now + delay; return 1; },
-    clearTimeout: () => { tick = null; },
+    Date: FakeDate,
+    setTimeout: (callback, delay) => { const id = timerSeq++; timers.set(id, { callback, due: now + delay }); return id; },
+    clearTimeout: id => { timers.delete(id); },
     require(name) {
       if (name === '@system.storage') {
         if (options.storageMissing) throw new Error('storage unavailable');
@@ -72,6 +82,22 @@ function launch(options = {}) {
         if (options.routerMissing) throw new Error('router unavailable');
         return { back() { backs.push(1); } };
       }
+      if (name === '@system.geolocation') {
+        if (options.geoMissing) throw new Error('geolocation unavailable');
+        return {
+          getLocation(call) {
+            geoGetCalls.push(call);
+            if (options.geoFails) call.fail('denied', 201);
+            else call.success({ speed: options.geoSpeed != null ? options.geoSpeed : 0, accuracy: 10 });
+          },
+          subscribe(call) {
+            geoSubscribeCalls.push(call);
+            if (options.geoSubscribeFails) call.fail('denied', 203);
+            else geoCallback = call.callback;
+          },
+          unsubscribe() { geoUnsubscribes++; }
+        };
+      }
       if (name === '@system.interconnect') {
         loads++;
         if (options.loadThrows) throw new Error('API missing');
@@ -88,8 +114,15 @@ function launch(options = {}) {
   const page = Object.assign({}, definition.private, definition);
   page.onInit();
   return { page, connection, sent, pending, screenRequests, screenCallbacks, vibrations, recoveries, backs, stored, storageRead: () => storageRead, loads: () => loads,
-    advance(ms) { now += ms; if (tick && now >= due) { const run = tick; tick = null; timerRuns++; run(); } },
-    timerRuns: () => timerRuns, running: () => !!tick, rawSends: () => rawSends };
+    geoSubscribeCalls, geoUnsubscribes: () => geoUnsubscribes,
+    geo(sample) { if (geoCallback) geoCallback(sample); },
+    advance(ms) {
+      now += ms;
+      for (const [id, entry] of Array.from(timers)) {
+        if (now >= entry.due) { timers.delete(id); timerRuns++; entry.callback(); }
+      }
+    },
+    timerRuns: () => timerRuns, running: () => timers.size > 0, rawSends: () => rawSends };
 }
 
 const navigation = seq => ({ v: 1, type: 'navigation', session: 'phone', seq, status: 'active', title: '高德地图', rawText: '前方200米右转', maneuver: 'right', instruction: '右转', distance: '200 米' });
@@ -271,12 +304,12 @@ test('unchanged heartbeats renew one expiry timer without changing view data', (
     app.connection.onmessage({ data: JSON.stringify(navigation(seq)) });
     assert.equal(app.page.rawLines, rows);
   }
-  assert.equal(app.timerRuns(), 0);
+  // The strip clock may fire inside the loop; what must not happen is an expiry
+  // repaint, which the status assertions below pin down.
   app.advance(19999);
   assert.equal(app.page.status, '高德导航');
   app.advance(1);
   assert.equal(app.page.status, '导航已过期');
-  assert.equal(app.timerRuns(), 1);
   assert.equal(app.running(), false);
 });
 
@@ -425,6 +458,98 @@ test('a missing vibrator never blocks navigation rendering', () => {
   assert.deepEqual(app.vibrations, []);
   assert.equal(app.page.status, '高德导航');
   assert.equal(app.page.distance, '200 米');
+});
+
+test('the top clock shows during navigation and vanishes when it ends', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  assert.equal(app.page.clockText, '');
+  assert.equal(app.page.clockVisible, false);
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.match(app.page.clockText, /^\d{2}:\d{2}$/);
+  assert.equal(app.page.clockVisible, true);
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(2), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '导航结束', distance: '' }) });
+  assert.equal(app.page.clockText, '');
+  assert.equal(app.page.clockVisible, false);
+  // The exit countdown legitimately keeps a timer; the clock itself must not re-arm.
+  app.advance(65000);
+  assert.equal(app.page.clockText, '');
+});
+
+test('the top clock keeps ticking along minute boundaries and stops when hidden', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.equal(app.running(), true);
+  const before = app.page.clockText;
+  app.advance(60050);
+  // Guidance expiry (20 s) fires inside this advance; the next packet revives it.
+  app.connection.onmessage({ data: JSON.stringify(navigation(2)) });
+  assert.notEqual(app.page.clockText, before, 'the minute advanced');
+  assert.equal(app.running(), true, 'the clock rearms for the next minute');
+  app.page.onHide();
+  assert.equal(app.running(), false);
+});
+
+test('speed subscribes on live navigation and follows gps samples', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  assert.equal(app.geoSubscribeCalls.length, 0, 'no subscription before navigation');
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.equal(app.geoSubscribeCalls.length, 1);
+  assert.equal(app.page.speedText, '0km/h', 'the first fix reports standstill honestly');
+  app.geo({ speed: null });
+  assert.equal(app.page.speedText, '0km/h', 'a lost fix does not invent a value');
+  app.geo({ speed: 5.4 });
+  assert.equal(app.page.speedText, '19km/h');
+  app.geo({ speed: 0.1 });
+  assert.equal(app.page.speedText, '0km/h', 'standstill drift shows a true zero');
+  app.geo({ speed: -3 });
+  assert.equal(app.page.speedText, '0km/h', 'invalid readings are ignored, not invented');
+});
+
+test('stale gps samples zero out after five seconds', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  app.geo({ speed: 5.4 });
+  assert.equal(app.page.speedText, '19km/h');
+  app.advance(4999);
+  assert.equal(app.page.speedText, '19km/h');
+  app.advance(1);
+  assert.equal(app.page.speedText, '0km/h', 'silence means standstill, not a frozen value');
+});
+
+test('speed unsubscribes on end and hide, resubscribes while navigation is live', () => {
+  const app = launch({ connected: true });
+  app.page.onReady(); app.page.onShow();
+  app.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.equal(app.geoSubscribeCalls.length, 1);
+  app.connection.onmessage({ data: JSON.stringify({ ...navigation(2), status: 'ended', instruction: '导航已结束', maneuver: 'arrive', rawText: '导航结束', distance: '' }) });
+  assert.equal(app.geoUnsubscribes(), 1);
+  assert.equal(app.page.speedText, '');
+  app.connection.onmessage({ data: JSON.stringify(navigation(3)) });
+  assert.equal(app.geoSubscribeCalls.length, 2);
+  app.page.onHide();
+  assert.equal(app.geoUnsubscribes(), 2);
+  app.page.onShow();
+  assert.equal(app.geoSubscribeCalls.length, 3, 'the cached packet is still live');
+});
+
+test('a refused subscription or missing module hides speed without crashing', () => {
+  const refused = launch({ connected: true, geoSubscribeFails: true });
+  refused.page.onReady(); refused.page.onShow();
+  refused.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.equal(refused.page.speedText, '');
+  assert.equal(refused.geoSubscribeCalls.length, 1);
+  refused.geo({ speed: 5.4 });
+  assert.equal(refused.page.speedText, '', 'no callback was registered');
+
+  const missing = launch({ connected: true, geoMissing: true });
+  missing.page.onReady(); missing.page.onShow();
+  missing.connection.onmessage({ data: JSON.stringify(navigation(1)) });
+  assert.equal(missing.page.speedText, '');
+  assert.doesNotThrow(() => missing.connection.onmessage({ data: JSON.stringify(navigation(2)) }));
 });
 
 test('the end-page countdown returns to the watchface when it reaches zero', () => {

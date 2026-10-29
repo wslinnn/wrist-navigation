@@ -10,6 +10,10 @@
           </list-item>
         </list>
       </div>
+      <div class="top-bar" if="{{ clockVisible }}" style="top: 12px; height: {{ titleHeight }}px;">
+        <text class="clock" style="font-size: {{ fontSize }}px; line-height: {{ titleHeight }}px;">{{ clockText }}</text>
+        <text class="speed" if="{{ speedText }}" style="font-size: {{ fontSize }}px; line-height: {{ titleHeight }}px;">{{ speedText }}</text>
+      </div>
       <div class="rest" if="{{ !guidance }}" style="top: {{ restTop }}px; height: {{ restHeight }}px;">
         <div class="rest-titles" style="height: {{ restTitleHeight }}px;">
           <text for="{{ titleLines }}" class="rest-title" style="height: {{ titleHeight }}px; line-height: {{ titleHeight }}px; font-size: {{ fontSize }}px;">{{ $item }}</text>
@@ -72,6 +76,7 @@
 const protocol = require('../../common/protocol')
 const presentation = require('../../common/presentation')
 const haptics = require('../../common/haptics').create()
+const metrics = require('../../common/metrics')
 const settings = require('../../common/settings')
 const manifest = require('../../manifest.json')
 let preferenceStore = null
@@ -86,6 +91,16 @@ let sendAsObject = false
 let screenLit = false
 let exitTimer = null
 let exitDismissed = false
+let clockTimer = null
+// Speed follows the proven WristSpeed flow: a one-shot getLocation first
+// (permission prompt + subsystem init), then the continuous subscription.
+// GPS samples stale for 5s mean standstill, not a frozen reading.
+let geolocation
+let speedSubscribed = false
+let speedFix = false
+let currentKmh = 0
+let lastSpeedSampleAt = 0
+let staleTimer = null
 let vibrator
 // The vibrator feature is absent on some band firmware; a failed probe stays disabled.
 function buzz(mode) {
@@ -105,6 +120,9 @@ export default {
   private: {
     settingsOpen: false,
     exitHint: '',
+    clockText: '',
+    clockVisible: false,
+    speedText: '',
     fontSize: settings.DEFAULTS.fontSize,
     arrowSize: settings.DEFAULTS.arrowSize,
     arrowWeight: settings.DEFAULTS.arrowWeight,
@@ -239,13 +257,90 @@ export default {
     this.cancelExit()
     this.paint()
   },
+  // The data strip clock only runs while live navigation is on screen; it fires
+  // just past each minute boundary so the shown minute never lags.
+  scheduleClock() {
+    if (clockTimer) return
+    const tickClock = () => {
+      clockTimer = null
+      if (!alive || !visible) return
+      this.paint()
+      // An empty strip means navigation is no longer live; stop ticking.
+      if (!this.dataText) return
+      clockTimer = setTimeout(tickClock, 60000 - (Date.now() % 60000) + 50)
+    }
+    tickClock()
+  },
+  cancelClock() {
+    if (clockTimer) { clearTimeout(clockTimer); clockTimer = null }
+  },
+  // Speed is only worth its battery while live navigation is on screen; every
+  // lifecycle path that ends it must go through here.
+  startSpeed() {
+    if (speedSubscribed || !alive) return
+    try {
+      if (geolocation === false) return
+      if (!geolocation) geolocation = require('@system.geolocation')
+      // Some firmware calls fail synchronously; the flag keeps that path from
+      // marking a refused subscription as active. Subscribe first: a synchronous
+      // first fix would otherwise paint before the flag is set.
+      let refused = false
+      geolocation.subscribe({
+        callback: data => { if (alive) this.applySpeed(data) },
+        fail: () => {
+          refused = true
+          if (alive) { this.stopSpeed(); this.paint() }
+        }
+      })
+      if (refused) return
+      speedSubscribed = true
+      geolocation.getLocation({
+        timeout: 60000,
+        success: data => { if (alive) this.applySpeed(data) },
+        fail: () => { /* Speed is auxiliary; a refusal just keeps it hidden. */ }
+      })
+    } catch (error) { geolocation = false }
+  },
+  stopSpeed() {
+    if (staleTimer) { clearTimeout(staleTimer); staleTimer = null }
+    currentKmh = 0
+    speedFix = false
+    if (!speedSubscribed) return
+    speedSubscribed = false
+    try {
+      if (geolocation && geolocation !== false) geolocation.unsubscribe()
+    } catch (error) { /* The page is going away either way. */ }
+  },
+  applySpeed(data) {
+    const kmh = metrics.speedKmh(data && data.speed)
+    if (kmh === null) return
+    lastSpeedSampleAt = Date.now()
+    speedFix = true
+    currentKmh = kmh
+    if (staleTimer) clearTimeout(staleTimer)
+    // A subscription can go silent without failing; 5 stale seconds is standstill.
+    staleTimer = setTimeout(() => {
+      staleTimer = null
+      if (!alive || !visible) return
+      currentKmh = 0
+      this.paint()
+    }, 5000)
+    // Hidden pages record the sample but must not repaint.
+    if (visible) this.paint()
+  },
   onShow() {
     visible = true
     this.paint()
+    if (latest && latest.status === 'active') {
+      this.scheduleClock()
+      this.startSpeed()
+    }
     if (connection) this.retry()
   },
   onHide() {
     visible = false
+    this.cancelClock()
+    this.stopSpeed()
     if (timer) clearTimeout(timer)
     timer = null
     this.keepScreenOn(false)
@@ -269,6 +364,8 @@ export default {
     timer = null
     if (exitTimer) { clearTimeout(exitTimer); exitTimer = null }
     this.exitHint = ''
+    this.cancelClock()
+    this.stopSpeed()
     if (connection) {
       try {
         connection.onmessage = () => {}
@@ -279,6 +376,8 @@ export default {
     }
     connection = null
     latest = null
+    // Official memory guidance: one explicit GC after all references are dropped.
+    try { if (typeof global !== 'undefined' && typeof global.runGC === 'function') global.runGC() } catch (error) { /* Firmware without runGC. */ }
   },
   ready() {
     this.send({ v: 1, type: 'ready' })
@@ -341,10 +440,17 @@ export default {
           const mode = haptics.update(packet)
           if (mode) buzz(mode)
           if (packet.status === 'ended') {
+            this.cancelClock()
+            this.stopSpeed()
             if (!exitDismissed) this.scheduleExit()
           } else {
             exitDismissed = false
             this.cancelExit()
+            // Hidden pages restart nothing here; onShow re-arms both from the cached packet.
+            if (packet.status === 'active' && visible) {
+              this.scheduleClock()
+              this.startSpeed()
+            }
           }
         }
       }
@@ -423,6 +529,26 @@ export default {
     if (rest.hintLines.join('\n') !== this.hintLines.join('\n')) this.hintLines = rest.hintLines
     // Unchanged heartbeats renew expiry without rebuilding native views.
     if (rest.rawLines.join('\n') !== this.rawLines.join('\n')) this.rawLines = rest.rawLines
+    this.paintTopBar(view)
+  },
+  // The top band lives where the centered guidance stage can never reach (it
+  // tops out at 292px of the 480px screen), so neither field is ever squeezed.
+  paintTopBar(view) {
+    const now = Date.now()
+    const text = view.live ? metrics.clockText(now) : ''
+    if (text !== this.clockText) this.clockText = text
+    const visible = !!text
+    if (this.clockVisible !== visible) {
+      this.clockVisible = visible
+      if (!visible) this.cancelClock()
+    }
+    // Once guidance stops being live the subscription is costing battery for nothing.
+    if (!view.live && speedSubscribed) this.stopSpeed()
+    let speed = ''
+    if (view.live && speedSubscribed && speedFix) {
+      speed = (now - lastSpeedSampleAt <= 5000 ? currentKmh : 0) + 'km/h'
+    }
+    if (speed !== this.speedText) this.speedText = speed
   }
 }
 </script>
@@ -447,6 +573,9 @@ export default {
 .detail-row { width: 288px; height: 31px; }
 .raw { width: 288px; color: #9aafa0; text-align: center; }
 .exit-hint { position: absolute; left: 24px; width: 288px; color: #d4b57b; text-align: center; }
+.top-bar { position: absolute; left: 24px; width: 288px; flex-direction: row; justify-content: space-between; align-items: center; }
+.clock { color: #f4f8f1; text-align: left; }
+.speed { color: #80f5be; text-align: right; }
 .settings { position: absolute; top: 0px; left: 0px; width: 336px; height: 480px; background-color: #000000; }
 .back { position: absolute; left: 20px; top: 14px; width: 44px; height: 48px; color: #ffffff; font-size: 38px; line-height: 48px; text-align: center; }
 .settings-title { position: absolute; left: 76px; top: 16px; width: 236px; color: #ffffff; }

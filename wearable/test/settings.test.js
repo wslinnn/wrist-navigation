@@ -8,9 +8,9 @@ test('device preferences reject invalid values and bound layout sizes', () => {
   assert.deepEqual(settings.normalize({ fontSize: 1000, arrowSize: -8, arrowWeight: NaN }),
     { fontSize: 44, arrowSize: 32, arrowWeight: 8 });
   assert.equal(settings.normalize({ fontSize: '40' }).fontSize, 30);
-  const legacy = settings.normalize({ font: 'song', fontSize: 40 });
+  const legacy = settings.normalize({ font: 'song', fontSize: 40, heartRate: true });
   assert.deepEqual(legacy, { fontSize: 40, arrowSize: 42, arrowWeight: 8 });
-  assert.equal('font' in legacy, false);
+  assert.equal('font' in legacy, false, 'unknown and retired fields are dropped');
 });
 
 test('a late load cannot undo user changes and queued writes finish in order', () => {
