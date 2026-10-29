@@ -15,6 +15,7 @@ public final class NavigationNotificationListener extends NotificationListenerSe
     private static NavigationNotificationListener instance;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean connected;
+    private long emptySince = -1;
     private WearBridge bridge() { return ((NavigationApp) getApplication()).bridge(); }
     private final Runnable poll = this::refresh;
     private final Runnable refreshTask = this::refresh;
@@ -71,18 +72,28 @@ public final class NavigationNotificationListener extends NotificationListenerSe
                     rawTime = sbn.getPostTime();
                 }
                 NavigationParser.Result result = NavigationParser.parse(sbn.getPackageName(), sbn.isOngoing(), fields);
-                if (result != null && sbn.getPostTime() >= newest) {
+                if (NavigationParser.prefer(result, sbn.getPostTime(), best, newest)) {
                     best = result;
                     newest = sbn.getPostTime();
                 }
             }
+            if (count == 0 && "active".equals(bridge().navigationStatus())) {
+                long now = android.os.SystemClock.elapsedRealtime();
+                if (emptySince < 0) emptySince = now;
+                if (now - emptySince < 1500) {
+                    handler.postDelayed(refreshTask, 1500 - (now - emptySince));
+                    return; // A remove/repost burst is not a navigation end.
+                }
+                best = new NavigationParser.Result("ended", "高德地图", "导航已结束", "arrive", "导航已结束", "");
+            } else emptySince = -1;
             bridge().lastAmapText = lastRaw.isEmpty() ? "没有可读取的高德通知文字" : lastRaw;
             bridge().notificationChecked(count, readable, best);
             bridge().updateFromNotifications(best);
         } catch (SecurityException | IllegalStateException error) {
             bridge().unavailable("通知读取不可用，请检查通知使用权");
         } finally {
-            if (connected && bridge().enabled()) handler.postDelayed(poll, bridge().pollIntervalMs());
+            long delay = bridge().pollIntervalMs();
+            if (connected && bridge().enabled() && delay >= 0) handler.postDelayed(poll, delay);
         }
     }
 
@@ -108,6 +119,7 @@ public final class NavigationNotificationListener extends NotificationListenerSe
     private void disconnect() {
         if (instance == this) instance = null;
         connected = false;
+        emptySince = -1;
         handler.removeCallbacksAndMessages(null);
         bridge().listenerConnected = false;
         bridge().unavailable("通知监听已断开");

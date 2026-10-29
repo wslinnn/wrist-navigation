@@ -16,5 +16,11 @@ final class SendPolicy {
 
     void sent(String fingerprint, long now) { sentFingerprint = fingerprint; sentAt = now; }
     long nextReadDelay(long now) { return sentAt < 0 ? HEARTBEAT_MS : Math.max(500, HEARTBEAT_MS - (now - sentAt)); }
+    long pollDelay(String status, long now) {
+        if ("active".equals(status)) return nextReadDelay(now);
+        // Navigation starts are delivered by NotificationListenerService. No idle timer.
+        if ("idle".equals(status) || "ended".equals(status) || "paused".equals(status)) return -1;
+        return 60000; // Retry a temporary read failure.
+    }
     void reset() { sentFingerprint = null; sentAt = -1; }
 }

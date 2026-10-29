@@ -64,6 +64,17 @@ public final class NavigationParser {
         return new Result("active", title, text, maneuver, instruction, distance);
     }
 
+    /** Actionable guidance wins over the parallel service notification.
+     * Explicit end messages compete by timestamp. */
+    static boolean prefer(Result candidate, long candidateTime, Result current, long currentTime) {
+        if (candidate == null) return false;
+        if (current == null) return true;
+        if ("ended".equals(candidate.status) || "ended".equals(current.status)) return candidateTime >= currentTime;
+        boolean detailed = !"unknown".equals(candidate.maneuver);
+        boolean currentDetailed = !"unknown".equals(current.maneuver);
+        return detailed != currentDetailed ? detailed : candidateTime >= currentTime;
+    }
+
     private static String maneuver(String text) {
         if (text.contains("掉头") || text.contains("调头")) return "uturn";
         if (text.contains("环岛")) return "roundabout";

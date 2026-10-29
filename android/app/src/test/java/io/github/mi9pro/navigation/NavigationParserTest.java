@@ -64,4 +64,20 @@ public class NavigationParserTest {
         assertEquals("", parse("右转进入示例路，剩余152米").distance);
         assertEquals("1.2 公里", parse("直行1.2公里").distance);
     }
+    @Test public void parsesHyperOs3Amap17WalkingAndCycling() {
+        var walking = NavigationParser.parse(NavigationParser.AMAP_PACKAGE, false, "124米后直行", "进入示例路｜高德导航中");
+        var cycling = NavigationParser.parse(NavigationParser.AMAP_PACKAGE, false, "69米后右转", "高德导航中");
+        assertEquals("124 米", walking.distance);
+        assertEquals("straight", walking.maneuver);
+        assertEquals("69 米", cycling.distance);
+        assertEquals("right", cycling.maneuver);
+    }
+    @Test public void serviceNotificationCannotReplaceActionableGuidance() {
+        var service = parse("高德地图持续为您导航，正在为您骑行导航>>");
+        var guidance = parse("69米后右转");
+        assertFalse(NavigationParser.prefer(service, 200, guidance, 100));
+        assertTrue(NavigationParser.prefer(guidance, 100, service, 200));
+        assertTrue(NavigationParser.prefer(parse("导航结束"), 300, guidance, 100));
+        assertFalse(NavigationParser.prefer(parse("导航结束"), 50, guidance, 100));
+    }
 }

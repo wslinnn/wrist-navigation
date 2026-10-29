@@ -51,4 +51,13 @@ public class SendPolicyTest {
         assertEquals(500, policy.nextReadDelay(9000));
     }
 
+    @Test public void idleStatesSkipPollingWhileActiveUsesHeartbeatAndFailuresRetry() {
+        SendPolicy policy = new SendPolicy();
+        assertEquals(-1, policy.pollDelay("idle", 1000));
+        assertEquals(-1, policy.pollDelay("ended", 1000));
+        assertEquals(-1, policy.pollDelay("paused", 1000));
+        assertEquals(8000, policy.pollDelay("active", 1000));
+        assertEquals(60000, policy.pollDelay("unavailable", 1000));
+    }
+
 }

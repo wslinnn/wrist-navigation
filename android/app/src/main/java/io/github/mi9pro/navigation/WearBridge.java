@@ -68,7 +68,7 @@ public final class WearBridge {
     }
 
     public void dump(PrintWriter writer) {
-        writer.println("WristNavigation diagnostics (phone 0.2.0)");
+        writer.println("WristNavigation diagnostics (phone " + BuildConfig.VERSION_NAME + ")");
         writer.println("enabled=" + enabled() + " listenerConnected=" + listenerConnected);
         writer.println("notification=" + notificationState + " checkedAt=" + lastNotificationCheck);
         writer.println("status=" + statusText);
@@ -99,7 +99,7 @@ public final class WearBridge {
     preferences.edit().putBoolean("keep_screen_on", value).apply();
     sendLatest();
   }
-    public long pollIntervalMs() { return "active".equals(realLatest.status) ? sendPolicy.nextReadDelay(SystemClock.elapsedRealtime()) : 60000; }
+    public long pollIntervalMs() { return sendPolicy.pollDelay(realLatest.status, SystemClock.elapsedRealtime()); }
     public String navigationStatus() { return realLatest.status; }
     public boolean hasConnectedNode() { return nodeId != null; }
     public boolean isNavigationActive() {
