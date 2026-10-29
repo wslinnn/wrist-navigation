@@ -71,6 +71,21 @@ public class NavigationParserTest {
         assertEquals("straight", walking.maneuver);
         assertEquals("69 米", cycling.distance);
         assertEquals("right", cycling.maneuver);
+        assertEquals("124米后直行\n进入示例路", walking.rawText);
+        assertFalse(walking.rawText.contains("高德导航中"));
+    }
+    @Test public void stripsStatusLabelVariantsWithoutTouchingGuidance() {
+        var halfWidth = parse("前方50米右转进入人民路 | 高德导航中");
+        assertEquals("right", halfWidth.maneuver);
+        assertEquals("50 米", halfWidth.distance);
+        assertFalse(halfWidth.rawText.contains("高德导航中"));
+        assertFalse(halfWidth.rawText.contains("|"));
+        assertEquals("高德地图\n前方50米右转进入人民路", halfWidth.rawText);
+        // A field that is only the status label disappears instead of surviving as noise.
+        assertNull(NavigationParser.parse(NavigationParser.AMAP_PACKAGE, false, " | 高德导航中"));
+        assertNull(NavigationParser.parse(NavigationParser.AMAP_PACKAGE, false, "高德导航中"));
+        // Wording without the fixed label is preserved verbatim.
+        assertEquals("高德地图\n步行导航中，剩余1公里", parse("步行导航中，剩余1公里").rawText);
     }
     @Test public void serviceNotificationCannotReplaceActionableGuidance() {
         var service = parse("高德地图持续为您导航，正在为您骑行导航>>");

@@ -13,6 +13,9 @@ public final class NavigationParser {
     private static final Pattern NAV = Pattern.compile("导航|直行|左转|右转|掉头|调头|行驶|步行|骑行|沿.{1,20}(?:路|街)|进入.{1,20}(?:路|街)");
     private static final Pattern TURN = Pattern.compile("左前方|右前方|左后方|右后方|向左转|向右转|左转|右转|掉头|调头|直行|靠左|靠右|进入环岛|驶出环岛");
     private static final Pattern DISTANCE = Pattern.compile("(\\d+(?:\\.\\d+)?)[\\s]*(公里|千米|米|km|m)(?![a-z])", Pattern.CASE_INSENSITIVE);
+    // Gaode appends a fixed status label to guidance text ("... | 高德导航中");
+    // remove that label, tolerate full-width pipes, but never touch any other wording.
+    private static final Pattern STATUS_LABEL = Pattern.compile("\\s*[|｜]\\s*高德(?:步行|骑行|驾车|货车)?导航中");
 
     public static final class Result {
         public final String status, title, rawText, maneuver, instruction, distance;
@@ -31,7 +34,11 @@ public final class NavigationParser {
         if (!AMAP_PACKAGE.equals(packageName)) return null;
         Set<String> unique = new LinkedHashSet<>();
         for (String field : fields) {
-            if (field != null && !field.trim().isEmpty()) unique.add(field.trim().replaceAll("[\\t ]+", " "));
+            if (field == null || field.trim().isEmpty()) continue;
+            String cleaned = STATUS_LABEL.matcher(field.trim().replaceAll("[\\t ]+", " ")).replaceAll("").trim();
+            // A pipe that only separated the removed label is no longer readable content.
+            cleaned = cleaned.replaceAll("^[|｜]\\s*", "").replaceAll("\\s*[|｜]$", "").trim();
+            if (!cleaned.isEmpty()) unique.add(cleaned);
         }
         if (unique.isEmpty()) return null;
         String text = String.join("\n", unique);
